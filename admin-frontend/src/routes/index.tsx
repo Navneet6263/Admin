@@ -1,195 +1,396 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import {
-  Command, Building2, Lock, Mail, Eye, EyeOff, Sparkles, CheckCircle2,
-  AlertCircle, ArrowRight, ShieldCheck
-} from "lucide-react";
-import { companies, GROUP } from "@/components/company";
-import { session } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
+import heroImage from "@/assets/hero-home-decor.jpg";
+import { session, request } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Sign in — RequestHub · Vision India Enterprise" },
-      { name: "description", content: "Enterprise Login Console for RequestHub — Manage Approvals, Finance, Inventory & Operations." },
+      { title: "Member Sign In — Admin @ Management." },
+      { name: "description", content: "Admin @ Management. Console — Manage Department Requests, Approvals, Treasury & Inventory." },
     ],
   }),
   component: Home,
 });
 
+type Mode = "signin" | "register" | "forgot";
+
+const DEPARTMENTS = [
+  "Executive / Super Admin",
+  "Administration & Gatekeeping",
+  "Human Resources",
+  "Finance & Treasury",
+  "Operations & Logistics",
+  "Sales & Marketing",
+  "IT & Support",
+  "Stage-2 Physical Verification",
+];
+
+const inputClass =
+  "w-full border border-slate-300 rounded-sm px-3.5 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all font-sans";
+const labelClass = "block text-sm font-medium text-slate-900 mb-1.5";
+
 function Home() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("spoken.3764@gmail.com");
-  const [password, setPassword] = useState("navneet");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showLoginCard, setShowLoginCard] = useState(false);
+  const [mode, setMode] = useState<Mode>("signin");
+  const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "spoken.3764@gmail.com",
+    password: "navneet",
+    department: DEPARTMENTS[0],
+  });
+  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError("Please fill in both work email and password.");
-      return;
-    }
+  useEffect(() => {
+    request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false)
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setTeams(data);
+          setFormData((prev) => ({ ...prev, department: data[0].name }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setSubmitted(false);
     setError("");
-    setLoading(true);
-    try {
-      const user = await session.login(email.trim(), password.trim());
-      const target = user.role === 'super_admin' ? '/super-admin' : `/${user.role}`;
-      void navigate({ to: target as '/admin' });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Invalid credentials. Please try again.');
-    } finally {
-      setLoading(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (mode === "signin") {
+      if (!formData.email.trim() || !formData.password.trim()) {
+        setError("Please fill in both email and password.");
+        return;
+      }
+      setLoading(true);
+      try {
+        const user = await session.login(formData.email.trim(), formData.password.trim());
+        const target = user.role === 'super_admin' ? '/super-admin' : `/${user.role}`;
+        void navigate({ to: target as '/admin' });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Invalid credentials. Please check email & password.');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setSubmitted(true);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#070c14] text-slate-100 font-sans flex flex-col relative overflow-hidden select-none">
-      {/* Dynamic ambient background glow */}
-      <div className="absolute -top-48 -left-48 w-[650px] h-[650px] bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-transparent rounded-full blur-3xl pointer-events-none animate-pulse" />
-      <div className="absolute -bottom-48 -right-48 w-[700px] h-[700px] bg-gradient-to-tl from-emerald-600/15 via-teal-600/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen flex flex-col bg-slate-900 select-none">
+      <div className="relative w-full min-h-screen overflow-hidden">
+        {/* Full-Screen Wallpaper */}
+        <img
+          src={heroImage}
+          alt="Admin @ Management. Wallpaper"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        {/* Light Overlay matching reference screenshot */}
+        <div className="absolute inset-0 bg-black/40" />
 
-      {/* Header */}
-      <header className="relative z-10 px-6 sm:px-10 py-5 flex items-center justify-between border-b border-white/10 backdrop-blur-md bg-slate-950/40">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 p-0.5 shadow-lg shadow-indigo-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] grid place-items-center">
-              <Command className="w-4 h-4 text-indigo-400" strokeWidth={2.5} />
-            </div>
+        {/* Header — Matched spacing from screenshot */}
+        <header className="absolute top-0 left-0 right-0 z-50">
+          <div className="flex items-center justify-between h-20 max-w-[1400px] mx-auto px-8 md:px-16">
+            <span
+              className="font-bold text-xl md:text-2xl text-white shrink-0 cursor-pointer tracking-tight"
+              style={{ fontFamily: "'Nunito', sans-serif" }}
+              onClick={() => setShowLoginCard(false)}
+            >
+              Admin @ Management.
+            </span>
+
+            <a
+              href="https://facebook.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit us on Facebook"
+              className="text-white/80 hover:text-white transition-colors duration-200"
+            >
+              <Facebook className="w-5 h-5" />
+            </a>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-display font-bold text-base tracking-tight text-white">RequestHub</span>
-              <span className="px-2 py-0.5 text-[9px] font-mono font-medium rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                v2.6 Enterprise
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Vision India Group · Enterprise Management Console</p>
-          </div>
-        </div>
+        </header>
 
-        <div className="hidden sm:flex items-center gap-4 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <CheckCircle2 className="w-3.5 h-3.5" /> SQL Server Online
-          </span>
-          <span className="flex items-center gap-1.5 text-slate-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> 256-bit Encrypted
-          </span>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 sm:px-6 py-12">
-        <div className="w-full max-w-5xl">
-          {/* Headline */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-4 text-xs font-medium text-slate-300 shadow-inner">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
-              <span>Unified Enterprise Workflow System</span>
-            </div>
-            <h1 className="font-display text-3xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-              Sign in to RequestHub
-            </h1>
-            <p className="text-slate-400 mt-3 text-sm max-w-lg mx-auto leading-relaxed">
-              Enterprise credentials login for Super Admin, Admin, Finance, Verifier, and Employee.
-            </p>
-          </div>
-
-          {/* Pure Credentials Login Card */}
-          <div className="max-w-md mx-auto">
-            <div className="bg-slate-900/70 border border-white/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+        {/* Main Section — Matched exact spacing & positioning from screenshot */}
+        <div className="relative min-h-screen flex items-center pt-20 pb-16">
+          <div className="w-full max-w-[1400px] mx-auto px-8 md:px-16">
+            <div className="grid md:grid-cols-[1fr_auto] gap-12 md:gap-24 items-center">
               
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-white font-display">Account Login</h2>
-                <p className="text-xs text-slate-400 mt-1">Enter your registered work email and password</p>
+              {/* Left Column — Title & Paragraph (Spatial Layout Matched) */}
+              <div className="flex flex-col justify-center max-w-xl">
+                <p className="uppercase text-xs md:text-sm font-semibold tracking-[0.18em] text-white/90 mb-6 drop-shadow-sm font-sans">
+                  10 JULY &nbsp;&bull;&nbsp; 9AM–6:30PM
+                </p>
+
+                <h1
+                  className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-6 leading-[1.08] drop-shadow-md"
+                  style={{ fontFamily: "'Nunito', sans-serif" }}
+                >
+                  Member<br />
+                  Sign In
+                </h1>
+
+                <p className="text-sm md:text-base leading-relaxed text-white/90 mb-8 drop-shadow-sm font-medium">
+                  Welcome to Admin @ Management. Console — The unified enterprise workflow system. Sign in to manage department requests, track physical claim verifications, issue petty cash funds, and monitor real-time inventory.
+                </p>
               </div>
 
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1.5 uppercase tracking-wider">Work Email</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. spoken.3764@gmail.com"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
-                      required
-                    />
+              {/* Right Column — Matched exact positioning of address block & GET STARTED button */}
+              {!showLoginCard ? (
+                <div className="flex flex-col items-start md:items-end text-left md:text-right text-white space-y-4 max-w-xs justify-self-end">
+                  <div className="space-y-1.5 drop-shadow-md">
+                    <p className="font-bold text-lg text-white">742 Corporate Center</p>
+                    <p className="font-semibold text-base text-white/95">Executive Wing, Building 4</p>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1.5 uppercase tracking-wider">Password</label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
-                      required
-                    />
+                  <div className="space-y-1 text-base text-white/90 drop-shadow-md pt-2">
+                    <p className="font-medium text-sm">hello@company.com</p>
+                    <p className="font-medium text-sm">(718) 555-9012</p>
+                  </div>
+
+                  <div className="pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-3 text-slate-400 hover:text-white transition-colors"
+                      onClick={() => setShowLoginCard(true)}
+                      className="px-10 py-4 text-xs font-bold tracking-[0.2em] uppercase bg-white text-slate-900 rounded-sm hover:bg-slate-100 transition-all duration-300 shadow-2xl hover:scale-105 cursor-pointer"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      GET STARTED
                     </button>
                   </div>
                 </div>
+              ) : (
+                /* Crisp White Login Card */
+                <div className="w-full md:w-[380px] bg-white rounded-sm shadow-2xl p-8 md:p-10 text-slate-900 animate-in fade-in slide-in-from-right-8 duration-300 relative justify-self-end">
+                  {/* Close Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginCard(false)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors p-1"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
 
-                {error && (
-                  <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {submitted ? (
+                    <div className="text-center py-6">
+                      <h2
+                        className="text-2xl font-bold text-slate-900 mb-3"
+                        style={{ fontFamily: "'Nunito', sans-serif" }}
+                      >
+                        {mode === "signin"
+                          ? "Welcome Back"
+                          : mode === "register"
+                          ? "Account Created"
+                          : "Check Your Email"}
+                      </h2>
+                      <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                        {mode === "forgot" ? (
+                          <>
+                            A reset link has been sent to{" "}
+                            <span className="font-medium text-slate-900">{formData.email}</span>.
+                          </>
+                        ) : (
+                          <>
+                            {mode === "signin" ? "Signed in as " : "Registered as "}
+                            <span className="font-medium text-slate-900">{formData.email}</span>
+                            {mode === "register" && (
+                              <>
+                                {" "}in <span className="font-medium text-slate-900">{formData.department}</span>
+                              </>
+                            )}
+                            .
+                          </>
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => switchMode("signin")}
+                        className="inline-block px-8 py-3 text-sm font-semibold tracking-[0.1em] uppercase bg-slate-900 text-white rounded-sm hover:opacity-90 transition-all duration-200"
+                      >
+                        Back to Sign In
+                      </button>
+                    </div>
                   ) : (
                     <>
-                      Sign In to Console <ArrowRight className="w-4 h-4" />
+                      <h2
+                        className="text-2xl font-bold text-slate-900 mb-1"
+                        style={{ fontFamily: "'Nunito', sans-serif" }}
+                      >
+                        {mode === "signin" ? "Sign In" : mode === "register" ? "Register" : "Reset Password"}
+                      </h2>
+                      <p className="text-sm text-slate-500 mb-6">
+                        {mode === "signin"
+                          ? "Access your department request dashboard"
+                          : mode === "register"
+                          ? "Create your staff account in seconds"
+                          : "We'll email you a secure reset link"}
+                      </p>
+
+                      <form onSubmit={handleSubmit} className="space-y-4">
+                        {mode === "register" && (
+                          <div>
+                            <label htmlFor="reg-name" className={labelClass}>
+                              Full Name
+                            </label>
+                            <input
+                              id="reg-name"
+                              type="text"
+                              required
+                              autoComplete="name"
+                              value={formData.name}
+                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                              className={inputClass}
+                              placeholder="Jane Doe"
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <label htmlFor="login-email" className={labelClass}>
+                            Work Email
+                          </label>
+                          <input
+                            id="login-email"
+                            type="email"
+                            required
+                            autoComplete="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className={inputClass}
+                            placeholder="spoken.3764@gmail.com"
+                          />
+                        </div>
+
+                        {mode === "register" && (
+                          <div>
+                            <label htmlFor="login-department" className={labelClass}>
+                              Assigned Department / Team
+                            </label>
+                            <select
+                              id="login-department"
+                              required
+                              value={formData.department}
+                              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                              className={inputClass}
+                            >
+                              {teams.length > 0
+                                ? teams.map((t) => (
+                                    <option key={t.id} value={t.name}>
+                                      {t.name} ({t.company})
+                                    </option>
+                                  ))
+                                : DEPARTMENTS.map((d) => (
+                                    <option key={d} value={d}>
+                                      {d}
+                                    </option>
+                                  ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {mode !== "forgot" && (
+                          <div>
+                            <label htmlFor="login-password" className={labelClass}>
+                              Password
+                            </label>
+                            <input
+                              id="login-password"
+                              type="password"
+                              required
+                              autoComplete={mode === "register" ? "new-password" : "current-password"}
+                              value={formData.password}
+                              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                              className={inputClass}
+                              placeholder="••••••••"
+                            />
+                          </div>
+                        )}
+
+                        {error && (
+                          <div className="flex items-center gap-2 p-3 rounded-sm bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                            <span>{error}</span>
+                          </div>
+                        )}
+
+                        {mode === "signin" && (
+                          <div className="flex items-center justify-between text-sm pt-1">
+                            <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+                              <input type="checkbox" defaultChecked className="rounded-sm border-slate-300 text-slate-900 focus:ring-slate-900" />
+                              Remember me
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => switchMode("forgot")}
+                              className="text-slate-900 underline underline-offset-2 hover:opacity-80"
+                            >
+                              Forgot password?
+                            </button>
+                          </div>
+                        )}
+
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="w-full mt-2 px-6 py-3 text-sm font-semibold tracking-[0.1em] uppercase bg-slate-900 text-white rounded-sm hover:bg-slate-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                        >
+                          {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          ) : mode === "signin" ? (
+                            "Sign In to Console"
+                          ) : mode === "register" ? (
+                            "Create Account"
+                          ) : (
+                            "Send Reset Link"
+                          )}
+                        </button>
+                      </form>
+
+                      <p className="text-sm text-slate-500 mt-6 text-center">
+                        {mode === "signin" ? (
+                          <>
+                            No account?{" "}
+                            <button
+                              type="button"
+                              onClick={() => switchMode("register")}
+                              className="text-slate-900 underline underline-offset-2 font-medium"
+                            >
+                              Register
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            Already have an account?{" "}
+                            <button
+                              type="button"
+                              onClick={() => switchMode("signin")}
+                              className="text-slate-900 underline underline-offset-2 font-medium"
+                            >
+                              Sign In
+                            </button>
+                          </>
+                        )}
+                      </p>
                     </>
                   )}
-                </button>
-              </form>
-
-              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
-                <span>SQL Server Authenticated</span>
-                <span className="text-slate-500 font-mono text-[10px]">Vision India Enterprise</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Group Entities Footer */}
-          <div className="mt-12 max-w-3xl mx-auto">
-            <div className="flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-slate-500 mb-3">
-              <Building2 className="w-3.5 h-3.5" /> {GROUP.name} · Sub-Entities
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {companies.map((c) => (
-                <div key={c.code} className="bg-slate-900/40 border border-white/5 rounded-xl p-3 text-center backdrop-blur-md">
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{c.code}</span>
-                  <p className="text-xs font-semibold text-white mt-1 truncate">{c.name}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{c.teams.length} Teams Configured</p>
                 </div>
-              ))}
+              )}
+
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
