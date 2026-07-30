@@ -90,7 +90,7 @@ router.get('/notifications/:userId', async (req: Request, res: Response) => {
     const result = await pool.request()
       .input('user_id', mssql.Int, userId)
       .query(`
-        SELECT TOP 30 id, message, read, created_at
+        SELECT TOP 30 id, message, is_read AS [read], created_at
         FROM notifications
         WHERE user_id = @user_id
         ORDER BY created_at DESC
@@ -107,7 +107,7 @@ router.patch('/notifications/:id/read', async (req: Request, res: Response) => {
   try {
     await pool.request()
       .input('id', mssql.Int, +req.params.id)
-      .query(`UPDATE notifications SET read = 1 WHERE id = @id`);
+      .query(`UPDATE notifications SET is_read = 1 WHERE id = @id`);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

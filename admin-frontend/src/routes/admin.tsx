@@ -111,7 +111,7 @@ function AdminConsole() {
         audit: [...r.audit, { at, actor: actorTag(), action: auditAction, note: autoNote(action, note) + deductNote }],
       };
     }));
-    approvedGroups.forEach((g) => inventoryStore.deduct(g.picks, { refId: g.refId, actor: actorTag() }));
+    void inventoryStore.deduct();
     setChecked(new Set());
     await Promise.all(ids.map(id => request(`/api/admin/requests/${requests.find(r => r.id === id)?.dbId}/${action}`, { method: 'POST', body: { remarks: note } })));
     await refresh();

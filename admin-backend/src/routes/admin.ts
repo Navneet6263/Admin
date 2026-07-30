@@ -88,13 +88,14 @@ async function applyAction(
     if (action === 'approved' && type === 'stationery' && details) {
       const picks = JSON.parse(details).items as Array<{ sku?: string; qty?: number }> | undefined;
       for (const pick of picks ?? []) {
-        if (!pick.sku || !Number.isInteger(pick.qty) || pick.qty < 1) continue;
+        const qty = pick.qty;
+        if (!pick.sku || !qty || qty < 1) continue;
         const stock = await tx.request().input('sku', mssql.NVarChar(30), pick.sku).query('SELECT qty FROM inventory WITH (UPDLOCK, ROWLOCK) WHERE sku=@sku');
         const onHand = stock.recordset[0]?.qty;
-        if (onHand === undefined || onHand < pick.qty) throw new Error(`Insufficient stock for ${pick.sku}`);
-        const balance = onHand - pick.qty;
+        if (onHand === undefined || onHand < qty) throw new Error(`Insufficient stock for ${pick.sku}`);
+        const balance = onHand - qty;
         await tx.request().input('sku', mssql.NVarChar(30), pick.sku).input('qty', mssql.Int, balance).query('UPDATE inventory SET qty=@qty,updated_at=GETDATE() WHERE sku=@sku');
-        await tx.request().input('sku', mssql.NVarChar(30), pick.sku).input('qty', mssql.Int, pick.qty).input('balance', mssql.Int, balance).input('ref', mssql.NVarChar(20), refId).input('actor', mssql.NVarChar(120), `Admin #${actorId}`).query("INSERT INTO stock_movements(sku,direction,qty,balance_after,source,ref_id,actor,note) VALUES(@sku,'out',@qty,@balance,'request',@ref,@actor,'Issued against approved request')");
+        await tx.request().input('sku', mssql.NVarChar(30), pick.sku).input('qty', mssql.Int, qty).input('balance', mssql.Int, balance).input('ref', mssql.NVarChar(20), refId).input('actor', mssql.NVarChar(120), `Admin #${actorId}`).query("INSERT INTO stock_movements(sku,direction,qty,balance_after,source,ref_id,actor,note) VALUES(@sku,'out',@qty,@balance,'request',@ref,@actor,'Issued against approved request')");
       }
     }
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock, AlertTriangle, Flame,
   Download, ShieldCheck, Crown, Zap, Gauge, Building2, Activity, LineChart,
-  Ban, RotateCcw, ArrowUpRight, Sparkles, Package, Boxes,
+  Ban, RotateCcw, ArrowUpRight, Sparkles, Package, Boxes, UserPlus, Plus,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { RequestRow } from "@/components/RequestRow";
@@ -81,7 +81,7 @@ function buildHistory(requests: RequestItem[]) {
   return { MONTHS: labels, heat: values, monthTotals: totals, grandTotal: totals.reduce((sum, value) => sum + value, 0), thisMonth: totals.at(-1) ?? 0, lastMonth: totals.at(-2) ?? 0, forecast: [1, 2, 3].map(step => Math.max(0, Math.round(average + slope * (2.5 + step)))), avg6: average };
 }
 
-type Tab = "overview" | "analytics" | "inventory" | "override" | "anomalies";
+type Tab = "overview" | "analytics" | "inventory" | "override" | "anomalies" | "team";
 
 function SuperAdmin() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -139,6 +139,7 @@ function SuperAdmin() {
     { id: "inventory", label: "Inventory", icon: Boxes },
     { id: "override", label: "Override Center", icon: ShieldCheck },
     { id: "anomalies", label: "Anomalies & Signals", icon: AlertTriangle },
+    { id: "team", label: "Team & Roles", icon: UserPlus },
   ];
 
   return (
@@ -187,7 +188,7 @@ function SuperAdmin() {
 
       <div className="px-4 sm:px-6 pb-10">
         {tab === "overview" && <OverviewTab requests={requests} history={history} />}
-        {tab === "analytics" && <AnalyticsTab requests={requests} history={history} />}
+        {tab === "analytics" && <AnalyticsTab requests={requests} />}
         {tab === "inventory" && <InventoryTab />}
         {tab === "override" && (
           <OverrideTab
@@ -197,7 +198,8 @@ function SuperAdmin() {
             onSelect={setSelectedId} onAction={onDetailAction}
           />
         )}
-        {tab === "anomalies" && <AnomaliesTab requests={requests} history={history} />}
+        {tab === "anomalies" && <AnomaliesTab requests={requests} />}
+        {tab === "team" && <TeamTab />}
       </div>
     </DashboardLayout>
   );
@@ -854,6 +856,274 @@ function KpiCard({ icon: Icon, label, value, tone }: {
         <Icon className={`w-3.5 h-3.5 ${tones.ic}`} />
       </div>
       <p className={`font-display text-xl font-semibold mt-1 tabular-nums ${tones.val}`}>{value}</p>
+    </div>
+  );
+}
+
+function TeamTab() {
+  const [users, setUsers] = useState<Array<{ id: number; email: string; name: string; role: string; company: string; dept: string; is_active: boolean; created_at: string }>>([]);
+  const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  // User form state
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'employee' | 'admin' | 'finance' | 'verifier' | 'super_admin'>('finance');
+  const [company, setCompany] = useState('VT');
+  const [dept, setDept] = useState('Engineering');
+  const [password, setPassword] = useState('pass123');
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [userError, setUserError] = useState('');
+  const [userSuccess, setUserSuccess] = useState('');
+
+  // Dynamic Team Creation state
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamCompany, setNewTeamCompany] = useState('VT');
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [teamError, setTeamError] = useState('');
+  const [teamSuccess, setTeamSuccess] = useState('');
+
+  const fetchUsersAndTeams = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [uData, tData] = await Promise.all([
+        request<Array<{ id: number; email: string; name: string; role: string; company: string; dept: string; is_active: boolean; created_at: string }>>('/api/super-admin/users'),
+        request<Array<{ id: number; name: string; company: string }>>('/api/teams'),
+      ]);
+      setUsers(uData);
+      setTeams(tData);
+      if (tData.length > 0 && !tData.some(t => t.name === dept)) {
+        setDept(tData[0].name);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchUsersAndTeams(); }, [fetchUsersAndTeams]);
+
+  // Create Team handler
+  const handleCreateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeamName.trim()) {
+      setTeamError('Please enter team name'); return;
+    }
+    setTeamError(''); setTeamSuccess(''); setCreatingTeam(true);
+    try {
+      const res = await request<{ name: string; company: string }>('/api/teams/create', {
+        method: 'POST',
+        body: { name: newTeamName.trim(), company: newTeamCompany },
+      });
+      setTeamSuccess(`Team "${res.name}" created for ${res.company} & saved to SQL Server!`);
+      setDept(res.name);
+      setNewTeamName('');
+      await fetchUsersAndTeams();
+    } catch (cause) {
+      setTeamError(cause instanceof Error ? cause.message : 'Failed to create team');
+    } finally {
+      setCreatingTeam(false);
+    }
+  };
+
+  // Create User handler
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setUserError('Please fill in Name, Email, and Password.'); return;
+    }
+    setUserError(''); setUserSuccess(''); setCreatingUser(true);
+    try {
+      const newUser = await request<{ name: string; email: string }>('/api/super-admin/users', {
+        method: 'POST',
+        body: { name, email, role, company, dept, password },
+      });
+      setUserSuccess(`User ${newUser.name} (${newUser.email}) created & saved to SQL Server!`);
+      setName(''); setEmail(''); setPassword('pass123');
+      await fetchUsersAndTeams();
+    } catch (cause) {
+      setUserError(cause instanceof Error ? cause.message : 'Failed to create user');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const roleBadges: Record<string, string> = {
+    super_admin: 'bg-purple-100 text-purple-800 border-purple-200',
+    admin: 'bg-slate-100 text-slate-800 border-slate-200',
+    finance: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    verifier: 'bg-violet-100 text-violet-800 border-violet-200',
+    employee: 'bg-sky-100 text-sky-800 border-sky-200',
+  };
+
+  return (
+    <div className="space-y-6 pt-2">
+      {/* 1. DYNAMIC TEAM CREATION SECTION */}
+      <div className="bg-gradient-to-r from-indigo-900/5 via-purple-900/5 to-transparent border border-indigo-200/60 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Building2 className="w-5 h-5 text-indigo-600" />
+          <div>
+            <h2 className="font-display font-semibold text-slate-900 text-base">Create New Team / Department</h2>
+            <p className="text-xs text-slate-500">Add custom team names (e.g. Product, QA, Legal, Mobile App) to SQL Server `teams` table</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateTeam} className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">New Team Name</label>
+            <input
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              placeholder="e.g. Product, QA, Legal"
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
+              required
+            />
+          </div>
+
+          <div className="w-40">
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Assigned Company</label>
+            <select
+              value={newTeamCompany}
+              onChange={(e) => setNewTeamCompany(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white"
+            >
+              <option value="VT">VT — Vision Tech</option>
+              <option value="VR">VR — Vision Retail</option>
+              <option value="VM">VM — Vision Media</option>
+              <option value="VL">VL — Vision Logistics</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={creatingTeam}
+            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> {creatingTeam ? 'Creating...' : 'Create Team'}
+          </button>
+        </form>
+
+        {teamError && <div className="mt-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 p-2 rounded-lg">{teamError}</div>}
+        {teamSuccess && <div className="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 p-2 rounded-lg font-medium">{teamSuccess}</div>}
+      </div>
+
+      {/* 2. CREATE TEAM MEMBER / ROLE ACCOUNT FORM */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+          <UserPlus className="w-5 h-5 text-indigo-600" />
+          <div>
+            <h2 className="font-display font-semibold text-slate-900 text-base">Create User / Team Member Account</h2>
+            <p className="text-xs text-slate-500">Select team from dynamic dropdown or enter custom details. Saves directly to SQL Server database</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Anjali Mehta" className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20" required />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Work Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. finance2@company.com" className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20" required />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Assigned Role</label>
+            <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white">
+              <option value="employee">Employee (Requestor)</option>
+              <option value="admin">Admin (Stage-1 Gatekeeper)</option>
+              <option value="finance">Finance (Fund Release / Treasury)</option>
+              <option value="verifier">Verifier (Stage-2 Claim Verification)</option>
+              <option value="super_admin">Super Admin (Executive Overseer)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Sub-Company</label>
+            <select value={company} onChange={(e) => setCompany(e.target.value)} className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white">
+              <option value="VT">VT — Vision Tech</option>
+              <option value="VR">VR — Vision Retail</option>
+              <option value="VM">VM — Vision Media</option>
+              <option value="VL">VL — Vision Logistics</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Select Team / Department</label>
+            <select value={dept} onChange={(e) => setDept(e.target.value)} className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 bg-white font-medium">
+              {teams.map((t) => (
+                <option key={t.id} value={t.name}>{t.name} ({t.company})</option>
+              ))}
+              <option value="Other">Custom / Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-medium text-slate-700 uppercase tracking-wider mb-1">Initial Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 6 characters" className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20" required />
+          </div>
+
+          {userError && <div className="sm:col-span-2 lg:col-span-3 text-xs text-rose-600 bg-rose-50 border border-rose-100 p-2.5 rounded-lg">{userError}</div>}
+          {userSuccess && <div className="sm:col-span-2 lg:col-span-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 p-2.5 rounded-lg font-medium">{userSuccess}</div>}
+
+          <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
+            <button type="submit" disabled={creatingUser} className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all inline-flex items-center gap-1.5 disabled:opacity-50">
+              <UserPlus className="w-4 h-4" /> {creatingUser ? 'Saving to Database...' : 'Save & Create Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 3. USERS ROSTER TABLE */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <h3 className="font-display text-xs font-semibold text-slate-800 uppercase tracking-wider">Group Team Roster ({users.length} Total Users in SQL Server)</h3>
+          <span className="text-[10px] text-slate-500 font-mono">Live DB table `users`</span>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-xs text-slate-500">Loading user roster from database...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2.5">ID</th>
+                  <th className="px-4 py-2.5">Name</th>
+                  <th className="px-4 py-2.5">Email</th>
+                  <th className="px-4 py-2.5">Role</th>
+                  <th className="px-4 py-2.5">Entity</th>
+                  <th className="px-4 py-2.5">Team / Dept</th>
+                  <th className="px-4 py-2.5">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-400">#{u.id}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{u.name}</td>
+                    <td className="px-4 py-3 text-slate-600 font-mono text-[11px]">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded border capitalize ${roleBadges[u.role] ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                        {u.role.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[11px] font-semibold text-slate-700">{u.company}</td>
+                    <td className="px-4 py-3 text-slate-600 font-medium">{u.dept || '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                        ● Active
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
