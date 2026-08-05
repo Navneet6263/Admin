@@ -9,11 +9,18 @@ USE admin_db;
 GO
 
 -- CLEANUP EXISTING TABLES IF RE-RUNNING
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS request_assignments;
+DROP TABLE IF EXISTS approval_policies;
+DROP TABLE IF EXISTS center_inventory;
 DROP TABLE IF EXISTS stock_movements;
 DROP TABLE IF EXISTS inventory;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS approvals;
 DROP TABLE IF EXISTS requests;
+DROP TABLE IF EXISTS center_budgets;
+DROP TABLE IF EXISTS user_centers;
+DROP TABLE IF EXISTS centers;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS teams;
 DROP TABLE IF EXISTS companies;
@@ -49,7 +56,8 @@ CREATE TABLE users (
   id         INT PRIMARY KEY IDENTITY(1,1),
   email      NVARCHAR(100) UNIQUE NOT NULL,
   name       NVARCHAR(100) NOT NULL,
-  role       NVARCHAR(20)  NOT NULL CHECK (role IN ('employee','admin','finance','verifier','super_admin')),
+  role       NVARCHAR(20)  NOT NULL CHECK (role IN (
+               'employee','admin','hq_admin','center_admin','finance','finance_head','verifier','super_admin')),
   company    NVARCHAR(8)   NOT NULL DEFAULT 'VT',   -- VT / VR / VM / VL
   dept       NVARCHAR(80)  NOT NULL DEFAULT '',
   password_hash NVARCHAR(256) NOT NULL,
@@ -60,7 +68,7 @@ CREATE TABLE users (
 -- REQUESTS TABLE
 CREATE TABLE requests (
   id          INT PRIMARY KEY IDENTITY(1,1),
-  ref_id      AS ('REQ-2026-' + RIGHT('0000' + CAST(id AS NVARCHAR), 4)) PERSISTED,
+  ref_id      AS ('REQ-' + RIGHT('000000' + CAST(id AS NVARCHAR), 6)) PERSISTED,
   user_id     INT NOT NULL REFERENCES users(id),
   company     NVARCHAR(8)   NOT NULL DEFAULT 'VT',
   team        NVARCHAR(80)  NOT NULL DEFAULT '',
@@ -87,8 +95,8 @@ CREATE TABLE approvals (
   request_id  INT NOT NULL REFERENCES requests(id),
   actor_id    INT NOT NULL REFERENCES users(id),
   action      NVARCHAR(30) NOT NULL CHECK (action IN (
-                'approved','rejected','queued','info_requested',
-                'verified','sent_back','commented')),
+                'raised','withdrawn','approved','rejected','queued','info_requested',
+                'verified','sent_back','commented','payment_updated','payment_verified')),
   note        NVARCHAR(1000),
   created_at  DATETIME DEFAULT GETDATE()
 );
@@ -171,72 +179,8 @@ INSERT INTO users (email, name, role, company, dept, password_hash) VALUES
   ('spoken.3764@gmail.com', 'Navneet (Super Admin)', 'super_admin', 'VT', 'Executive', '680bf4a16323ee35256996f395d68b84:c5f364717d3f92584e19c4b543644397cdd4f3acc9865811b67886cd766ab3c15e8c770d2e18ea47c9166549de37075e45f87011c429a000a7c8ebf61e594e86');
 GO
 
--- ============================================
--- SEED REQUESTS (15 Realistic Sample Requests)
--- ============================================
-INSERT INTO requests (user_id,company,team,type,subject,amount,description,priority,status,created_at) VALUES
-  (1,'VT','Engineering','id_card',      'Replacement ID card — lost',                  NULL,   'Lost original card near cafeteria on 14 Jul. Need urgent replacement.', 'urgent', 'pending',              DATEADD(HOUR,-2,  GETDATE())),
-  (1,'VR','Sales',      'visiting_card','Reprint — 500 qty, Senior AE title',           NULL,   'Promoted to Senior Account Executive. Need updated title cards.',        'normal', 'pending',              DATEADD(HOUR,-5,  GETDATE())),
-  (1,'VM','Design',     'stationery',   'Whiteboard markers & sticky notes bulk',       3400,   'Design sprint preparation for next week.',                              'low',    'pending',              DATEADD(HOUR,-12, GETDATE())),
-  (1,'VT','HR',         'travel',       'Flight — DEL → BLR, 24 Jul, return 26 Jul',   22500,  'Campus recruitment drive at IIM Bangalore.',                             'urgent', 'pending',              DATEADD(HOUR,-18, GETDATE())),
-  (1,'VT','Engineering','courier',      'Blue Dart — legal contracts to Mumbai HQ',    850,    'Physical signed original contracts for legal review.',                   'normal', 'pending',              DATEADD(HOUR,-24, GETDATE())),
-  (1,'VM','Marketing',  'meeting_room', 'Executive Board Room A — Q3 review, 4 hrs',    NULL,   'Quarterly marketing review with leadership.',                             'high',   'pending',              DATEADD(HOUR,-30, GETDATE())),
-  (1,'VT','Operations', 'fooding',      'Team lunch catering — 15 pax',                5500,   'Project milestone completion lunch.',                                    'normal', 'awaiting_verification',DATEADD(HOUR,-36, GETDATE())),
-  (1,'VM','Marketing',  'travel',       'Taxi — Airport pickup & hotel drop',          1800,   'Client visit from Bangalore airport.',                                   'normal', 'awaiting_verification',DATEADD(HOUR,-48, GETDATE())),
-  (1,'VT','Admin',      'stationery',   'Printer cartridges — HP LaserJet 88A (qty 2)', 8400,  'Stock depletion in 2nd floor admin desk.',                               'normal', 'approved',             DATEADD(DAY,-4,   GETDATE())),
-  (1,'VT','Engineering','visiting_card','Reprint — 250 qty standard',                  NULL,   'Stock exhaustion.',                                                      'low',    'approved',             DATEADD(DAY,-6,   GETDATE())),
-  (1,'VT','HR',         'courier',      'DTDC — offer letters batch dispatch',          1200,   'Dispatching signed offer letters.',                                      'normal', 'approved',             DATEADD(DAY,-8,   GETDATE())),
-  (1,'VM','Marketing',  'fooding',      'Client dinner & catering',                     9200,   'Prospective client dinner at Taj.',                                      'high',   'approved',             DATEADD(DAY,-10,  GETDATE())),
-  (1,'VL','Logistics',  'travel',       'Flight — BOM → DEL emergency travel',         18500,  'Emergency warehouse inspection.',                                       'urgent', 'rejected',             DATEADD(DAY,-12,  GETDATE())),
-  (1,'VT','Engineering','stationery',   'A4 printer paper (10 reams)',                 4500,   'Bulk paper supply for engineering section.',                             'normal', 'info_requested',       DATEADD(DAY,-14,  GETDATE())),
-  (1,'VR','Sales',      'meeting_room', 'Conference Hall B — Product Launch',          NULL,   'New product demo session with partners.',                                'normal', 'queued',               DATEADD(DAY,-15,  GETDATE()));
-GO
-
--- Seed approvals for approved/awaiting/rejected requests
-INSERT INTO approvals (request_id,actor_id,action,note,created_at) VALUES
-  (7, 1, 'approved', 'Approved by Admin. Sent to Verifier for bill check.', DATEADD(HOUR,-32, GETDATE())),
-  (8, 1, 'approved', 'Approved. Taxi bill to be verified.',                 DATEADD(HOUR,-44, GETDATE())),
-  (9, 1, 'approved', 'Approved under admin budget.',                        DATEADD(DAY,-3,   GETDATE())),
-  (10,1, 'approved', 'Standard reprint approved.',                          DATEADD(DAY,-5,   GETDATE())),
-  (11,1, 'approved', 'Approved for HR dispatch.',                           DATEADD(DAY,-7,   GETDATE())),
-  (12,1, 'approved', 'Approved by Finance & Executive.',                    DATEADD(DAY,-9,   GETDATE())),
-  (13,1, 'rejected', 'Exceeds travel budget limits for Q3.',                DATEADD(DAY,-11,  GETDATE())),
-  (14,1, 'info_requested', 'Please specify exact GSM requirement.',         DATEADD(DAY,-13,  GETDATE()));
-GO
-
--- ============================================
--- SEED INVENTORY
--- ============================================
-INSERT INTO inventory (sku,name,category,unit,price,qty,threshold) VALUES
-  ('STA-WBM-10',  'Whiteboard markers (assorted)',  'Writing',  'pack of 10',  300,  25, 10),
-  ('STA-STN-100', 'Sticky notes 3×3 (yellow)',      'Paper',    '100 sheets',  80,   40, 10),
-  ('STA-A4P-500', 'A4 printer paper (75 gsm)',      'Paper',    '500 sheets',  450,  15, 10),
-  ('STA-BPP-10',  'Ballpoint pens (blue)',          'Writing',  'pack of 10',  120,  8,  10),
-  ('STA-HPC-01',  'HP LaserJet cartridge 88A',      'Printing', '1 cartridge', 4200, 5,  6 ),
-  ('STA-FLD-25',  'File folders (A4, plastic)',     'Filing',   'pack of 25',  550,  30, 10),
-  ('STA-HLT-05',  'Highlighters (5-colour)',        'Writing',  'pack of 5',   150,  20, 8 ),
-  ('STA-STP-01',  'Stapler + 1000 pins',            'Desk',     '1 kit',       450,  12, 6 ),
-  ('STA-NBK-05',  'A5 notebooks (ruled)',           'Paper',    'pack of 5',   200,  18, 10),
-  ('STA-USB-01',  'USB drive 32 GB',               'Misc',     '1 pc',        550,  4,  6 ),
-  ('STA-BAT-04',  'AA batteries (pack of 4)',       'Misc',     'pack of 4',   90,   30, 10);
-GO
-
--- ============================================
--- SEED INITIAL STOCK MOVEMENTS
--- ============================================
-INSERT INTO stock_movements (sku,direction,qty,balance_after,source,actor,note) VALUES
-  ('STA-WBM-10', 'in', 25, 25, 'seed', 'System', 'Initial stock seed'),
-  ('STA-STN-100', 'in', 40, 40, 'seed', 'System', 'Initial stock seed'),
-  ('STA-A4P-500', 'in', 15, 15, 'seed', 'System', 'Initial stock seed'),
-  ('STA-BPP-10',  'in', 8,  8,  'seed', 'System', 'Initial stock seed'),
-  ('STA-HPC-01',  'in', 5,  5,  'seed', 'System', 'Initial stock seed'),
-  ('STA-FLD-25',  'in', 30, 30, 'seed', 'System', 'Initial stock seed'),
-  ('STA-HLT-05',  'in', 20, 20, 'seed', 'System', 'Initial stock seed'),
-  ('STA-STP-01',  'in', 12, 12, 'seed', 'System', 'Initial stock seed'),
-  ('STA-NBK-05',  'in', 18, 18, 'seed', 'System', 'Initial stock seed'),
-  ('STA-USB-01',  'in', 4,  4,  'seed', 'System', 'Initial stock seed'),
-  ('STA-BAT-04',  'in', 30, 30, 'seed', 'System', 'Initial stock seed');
-GO
+-- Transactional requests, approvals, inventory, and stock movements intentionally
+-- start empty. Populate them through the application so every displayed record is real.
 
 -- VERIFY
 SELECT COUNT(*) AS users_count FROM users;

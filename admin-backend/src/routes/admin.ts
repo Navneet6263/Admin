@@ -3,6 +3,8 @@ import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache, type RequestStatus } from '../db';
 
 const router = Router();
+router.use(['/requests/:id/approve','/requests/:id/reject','/requests/:id/queue','/requests/:id/info'], (_req, res) =>
+  res.status(410).json({ error: 'Legacy action retired; use /api/workflow' }));
 
 // ── GET /api/admin/requests?status=pending ───────────────────────────────────
 router.get('/requests', async (req: Request, res: Response) => {

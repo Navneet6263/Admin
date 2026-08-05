@@ -28,15 +28,20 @@ function EmployeeConsole() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [prefillType, setPrefillType] = useState<RequestType | null>(null);
   const [confirmWithdraw, setConfirmWithdraw] = useState<RequestItem | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string; dept: string; company: string }>({
-    id: 0, name: "Employee", email: "", dept: "Operations", company: "Vision India"
+  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>({
+    id: 0, name: "", email: "", dept: "", company: "", center_code: null
   });
+  const [centers, setCenters] = useState<Array<{ code: string; name: string; city: string }>>([]);
 
   const refresh = useCallback(async () => {
     try {
-      const me = await request<{ id: number; name: string; email: string; dept: string; company: string }>('/api/auth/me');
+      const me = await request<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>('/api/auth/me');
       setCurrentUser(me);
-      setRequests(await getRequests(`/api/employee/requests/${me.id}`));
+      const [mine, centerList] = await Promise.all([
+        getRequests(`/api/employee/requests/${me.id}`),
+        request<Array<{ code: string; name: string; city: string }>>('/api/centers/public'),
+      ]);
+      setRequests(mine); setCenters(centerList);
     } catch (error) { console.error(error); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -81,19 +86,20 @@ function EmployeeConsole() {
     type: RequestType; subject: string; description: string; amount: number | null; priority: Priority;
     items?: import("@/components/models").StationeryPick[];
     details?: Record<string, unknown>;
+    request_center_code: string;
   }) => {
     const created = await request<{ id: number; ref_id: string }>('/api/employee/requests', {
       method: 'POST',
-      body: { user_id: currentUser.id, ...draft, details: { ...draft.details, items: draft.items } }
+      body: { ...draft, details: { ...draft.details, items: draft.items } }
     });
     await refresh();
     setTab("active");
     if (created?.ref_id) setSelectedId(created.ref_id);
-    setSuccessToast(`Request ${created?.ref_id || 'submitted'} created successfully! Sent to Center Admin for approval.`);
+    setSuccessToast(`Request ${created?.ref_id || 'submitted'} created and policy-routed successfully.`);
     setTimeout(() => setSuccessToast(null), 6000);
     setDialogOpen(false);
     setPrefillType(null);
-  }, [refresh, currentUser.id]);
+  }, [refresh]);
 
   const cancelRequest = useCallback(async (reqItem: RequestItem) => {
     try {
@@ -288,7 +294,7 @@ function EmployeeConsole() {
         </div>
       )}
 
-      <NewRequestDialog open={dialogOpen} initialType={prefillType}
+      <NewRequestDialog open={dialogOpen} initialType={prefillType} centers={centers} homeCenter={currentUser.center_code || ""}
         onClose={() => { setDialogOpen(false); setPrefillType(null); }}
         onSubmit={submitDraft} />
     </DashboardLayout>

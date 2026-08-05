@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock, AlertTriangle,
-  Download, ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus
+  Download, ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus, KeyRound
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { type RequestItem, type RequestStatus } from "@/components/models";
-import { getRequests, request } from "@/lib/api";
+import { getRequests, request, session } from "@/lib/api";
 
-import { SA, actorTag, autoNote, buildHistory, fmtINR, grandTotal, monthDelta, thisMonth, type Tab, type UserRow, type CenterRow } from "@/components/super-admin/shared";
+import { autoNote, buildHistory, fmtINR, type Tab, type UserRow, type CenterRow } from "@/components/super-admin/shared";
 import { StatChip } from "@/components/super-admin/widgets";
 import { OverviewTab } from "@/components/super-admin/OverviewTab";
 import { AnalyticsTab } from "@/components/super-admin/AnalyticsTab";
@@ -17,6 +17,7 @@ import { AnomaliesTab } from "@/components/super-admin/AnomaliesTab";
 import { InventoryTab } from "@/components/super-admin/InventoryTab";
 import { TeamTab } from "@/components/super-admin/TeamTab";
 import { CentersAssignmentPanel } from "@/components/super-admin/CentersPanel";
+import { PolicyTab } from "@/components/super-admin/PolicyTab";
 
 export const Route = createFileRoute("/super-admin")({
   head: () => ({
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/super-admin")({
 });
 
 function SuperAdmin() {
+  const [sessionUser, setSessionUser] = useState(session.user);
   const [tab, setTab] = useState<Tab>("overview");
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -67,9 +69,13 @@ function SuperAdmin() {
     try { setRequests(await getRequests('/api/requests')); } catch (error) { console.error(error); }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); void session.me().then(setSessionUser); }, [refresh]);
 
   const history = useMemo(() => buildHistory(requests), [requests]);
+  const actor = sessionUser ? `${sessionUser.name} (USR-${sessionUser.id})` : "Authenticated Super Admin";
+  const monthDelta = history.lastMonth > 0
+    ? ((history.thisMonth - history.lastMonth) / history.lastMonth) * 100
+    : 0;
 
   const kpis = useMemo(() => {
     const approved = requests.filter(r => r.status === "approved").length;
@@ -97,7 +103,7 @@ function SuperAdmin() {
       const action = next === "approved" ? "approved" : next === "rejected" ? "rejected" : next === "queued" ? "queued" : "commented";
       return {
         ...r, status: next, updatedAt: at,
-        audit: [...r.audit, { at, actor: actorTag(), action, note: autoNote(verb, note) }],
+        audit: [...r.audit, { at, actor, action, note: autoNote(actor, verb, note) }],
       };
     }));
     const target = requests.find(r => r.id === id);
@@ -105,7 +111,7 @@ function SuperAdmin() {
       await request(`/api/super-admin/requests/${target.dbId}/override`, { method: 'POST', body: { next_status: next, note } });
       await refresh();
     }
-  }, [refresh, requests]);
+  }, [actor, refresh, requests]);
 
   const onDetailAction = useCallback((id: string, action: string, note: string) => {
     if (action === "approve") void override(id, "approved", "Force-approved", note);
@@ -123,10 +129,11 @@ function SuperAdmin() {
     { id: "anomalies", label: "Anomalies & Signals", icon: AlertTriangle },
     { id: "team", label: "Team & Roles", icon: UserPlus },
     { id: "centers", label: "Centers & Assignment", icon: Building2 },
+    { id: "policies", label: "Approval Policies", icon: KeyRound },
   ];
 
   return (
-    <DashboardLayout workspace="Executive Console" role="Super Admin · Group COO" currentUser={`${SA.name} · ${SA.id}`} searchQuery={centerSearch} onSearchChange={setCenterSearch}>
+    <DashboardLayout workspace="Executive Console" role={sessionUser?.dept || "Super Admin"} currentUser={sessionUser?.name ?? ""} searchQuery={centerSearch} onSearchChange={setCenterSearch}>
       <div className="px-4 sm:px-6 pt-6 pb-4">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
@@ -136,16 +143,16 @@ function SuperAdmin() {
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded border border-indigo-100 bg-indigo-50 text-indigo-700">
-                <ShieldCheck className="w-3 h-3" /> Signed in as {SA.name}
-                <span className="font-mono text-indigo-600/80">· {SA.id}</span>
+                <ShieldCheck className="w-3 h-3" /> Signed in as {sessionUser?.name ?? "Loading…"}
+                {sessionUser && <span className="font-mono text-indigo-600/80">· USR-{sessionUser.id}</span>}
               </span>
               <span className="text-[11px] text-slate-500">Full override authority · every action signed.</span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <StatChip icon={Wallet} label="Group spend YTD" value={fmtINR(grandTotal)} />
+            <StatChip icon={Wallet} label="Rolling 12M spend" value={fmtINR(history.grandTotal)} />
             <StatChip icon={monthDelta >= 0 ? TrendingUp : TrendingDown} label="This month"
-              value={fmtINR(thisMonth)} sub={`${monthDelta>=0?"▲":"▼"} ${Math.abs(monthDelta).toFixed(1)}%`}
+              value={fmtINR(history.thisMonth)} sub={`${monthDelta>=0?"▲":"▼"} ${Math.abs(monthDelta).toFixed(1)}%`}
               tone={monthDelta >= 0 ? "rose" : "emerald"} />
             <StatChip icon={CheckCircle2} label="Approval rate" value={`${kpis.rate}%`} sub={`${kpis.approved}/${kpis.total}`} />
             <StatChip icon={Clock} label="Avg TAT" value={`${kpis.avgTat}h`} />
@@ -171,7 +178,7 @@ function SuperAdmin() {
 
       <div className="px-4 sm:px-6 pb-10">
         {tab === "overview" && <OverviewTab requests={requests} history={history} />}
-        {tab === "analytics" && <AnalyticsTab requests={requests} />}
+        {tab === "analytics" && <AnalyticsTab requests={requests} history={history} />}
         {tab === "inventory" && <InventoryTab />}
         {tab === "override" && (
           <OverrideTab
@@ -183,6 +190,7 @@ function SuperAdmin() {
         )}
         {tab === "anomalies" && <AnomaliesTab requests={requests} />}
         {tab === "team" && <TeamTab />}
+        {tab === "policies" && <PolicyTab />}
         {tab === "centers" && (
           <CentersAssignmentPanel
             users={centerUsers} centers={centers}

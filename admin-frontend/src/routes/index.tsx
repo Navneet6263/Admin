@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { CenterCombobox } from "@/components/CenterCombobox";
 import { useState, useEffect } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
@@ -16,17 +17,6 @@ export const Route = createFileRoute("/")({
 
 type Mode = "signin" | "register" | "forgot";
 
-const DEPARTMENTS = [
-  "Executive / Super Admin",
-  "Administration & Gatekeeping",
-  "Human Resources",
-  "Finance & Treasury",
-  "Operations & Logistics",
-  "Sales & Marketing",
-  "IT & Support",
-  "Stage-2 Physical Verification",
-];
-
 const inputClass =
   "w-full border border-slate-300 rounded-sm px-3.5 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all font-sans";
 const labelClass = "block text-sm font-medium text-slate-900 mb-1.5";
@@ -36,17 +26,15 @@ function Home() {
   const [showLoginCard, setShowLoginCard] = useState(false);
   const [mode, setMode] = useState<Mode>("signin");
   const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
-  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string }>>([
-    { id: 1, code: 'VI', name: 'Vision India' },
-    { id: 2, code: 'JJ', name: 'Just Job' },
-    { id: 3, code: 'LS', name: 'Live Skills' },
-  ]);
+  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string }>>([]);
+  const [centers, setCenters] = useState<Array<{ id: number; code: string; name: string; city: string; is_active: boolean }>>([]);
   const [formData, setFormData] = useState({
     name: "",
-    email: "spoken.3764@gmail.com",
-    password: "navneet",
-    company: "Vision India",
-    department: DEPARTMENTS[0],
+    email: "",
+    password: "",
+    company: "",
+    department: "",
+    center_code: "",
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,7 +44,8 @@ function Home() {
     Promise.all([
       request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false).catch(() => []),
       request<Array<{ id: number; code: string; name: string }>>('/api/companies', {}, false).catch(() => []),
-    ]).then(([tData, cData]) => {
+      request<Array<{ id: number; code: string; name: string; city: string; is_active: boolean }>>('/api/centers/public', {}, false).catch(() => []),
+    ]).then(([tData, cData, centerData]) => {
       if (Array.isArray(tData) && tData.length > 0) {
         setTeams(tData);
         setFormData((prev) => ({ ...prev, department: tData[0].name }));
@@ -65,6 +54,9 @@ function Home() {
         setCompaniesList(cData);
         setFormData((prev) => ({ ...prev, company: cData[0].name }));
       }
+      const activeCenters = centerData.filter((center) => center.is_active !== false);
+      setCenters(activeCenters);
+      if (activeCenters[0]) setFormData((prev) => ({ ...prev, center_code: activeCenters[0].code }));
     });
   }, []);
 
@@ -86,7 +78,13 @@ function Home() {
       setLoading(true);
       try {
         const user = await session.login(formData.email.trim(), formData.password.trim());
-        const target = user.role === 'super_admin' ? '/super-admin' : `/${user.role}`;
+        const routes: Record<string, string> = {
+          super_admin: '/super-admin',
+          center_admin: '/center-admin',
+          hq_admin: '/admin',
+          admin: '/admin',
+        };
+        const target = routes[user.role] ?? `/${user.role}`;
         void navigate({ to: target as '/admin' });
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Invalid credentials. Please check email & password.');
@@ -94,8 +92,8 @@ function Home() {
         setLoading(false);
       }
     } else if (mode === "register") {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
-        setError("Please fill in Name, Email and Password.");
+      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.company || !formData.center_code) {
+        setError("Please fill in Name, Email, Password, Company and Center.");
         return;
       }
       setLoading(true);
@@ -106,8 +104,15 @@ function Home() {
           password: formData.password.trim(),
           company: formData.company,
           dept: formData.department,
+          center_code: formData.center_code,
         });
-        const target = user.role === 'super_admin' ? '/super-admin' : `/${user.role}`;
+        const routes: Record<string, string> = {
+          super_admin: '/super-admin',
+          center_admin: '/center-admin',
+          hq_admin: '/admin',
+          admin: '/admin',
+        };
+        const target = routes[user.role] ?? `/${user.role}`;
         void navigate({ to: target as '/employee' });
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Registration failed. Please try again.');
@@ -300,7 +305,7 @@ function Home() {
                             value={formData.email}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             className={inputClass}
-                            placeholder="spoken.3764@gmail.com"
+                            placeholder="you@company.com"
                           />
                         </div>
 
@@ -326,6 +331,14 @@ function Home() {
                             </div>
 
                             <div>
+                              <label htmlFor="login-center" className={labelClass}>Your Home Center</label>
+                              <CenterCombobox centers={centers} value={formData.center_code}
+                                onChange={(center_code) => setFormData({ ...formData, center_code })}
+                                placeholder="Search by center, city or code…" required />
+                              <p className="mt-1 text-[10px] text-slate-500">Only the center code is stored; full name comes dynamically from the database.</p>
+                            </div>
+
+                            <div>
                               <label htmlFor="login-department" className={labelClass}>
                                 Department
                               </label>
@@ -336,17 +349,17 @@ function Home() {
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 className={inputClass}
                               >
-                                {teams.length > 0
-                                  ? teams.map((t) => (
-                                      <option key={t.id} value={t.name}>
-                                        {t.name}
-                                      </option>
-                                    ))
-                                  : DEPARTMENTS.map((d) => (
-                                      <option key={d} value={d}>
-                                        {d}
-                                      </option>
-                                    ))}
+                                {teams.length > 0 ? (
+                                  teams.map((t) => (
+                                    <option key={t.id} value={t.name}>
+                                      {t.name}
+                                    </option>
+                                  ))
+                                ) : (
+                                  <option value="" disabled>
+                                    No departments available
+                                  </option>
+                                )}
                               </select>
                             </div>
                           </>

@@ -92,32 +92,8 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_budget_center_month')
     ON center_budgets(center_code, year, month);
 GO
 
--- ── 7. SEED CENTERS ───────────────────────────────────────────
-IF NOT EXISTS (SELECT 1 FROM centers WHERE code = 'A11')
-BEGIN
-  INSERT INTO centers (code, name, city, company) VALUES
-    ('A11', 'Noida HQ',          'Noida',     'VT'),
-    ('B01', 'Patna Center',      'Patna',      'VT'),
-    ('C01', 'Mumbai Office',     'Mumbai',     'VT'),
-    ('D01', 'Bangalore Center',  'Bangalore',  'VT'),
-    ('E01', 'Hyderabad Center',  'Hyderabad',  'VT');
-END
-GO
-
--- ── 8. SEED CENTER BUDGETS (Current Month) ───────────────────
-DECLARE @m TINYINT  = MONTH(GETDATE());
-DECLARE @y SMALLINT = YEAR(GETDATE());
-
-IF NOT EXISTS (SELECT 1 FROM center_budgets WHERE center_code='A11' AND month=@m AND year=@y)
-BEGIN
-  INSERT INTO center_budgets (center_code, month, year, allocated, committed, spent) VALUES
-    ('A11', @m, @y, 500000, 85000,  62000),
-    ('B01', @m, @y, 200000, 40000,  38000),
-    ('C01', @m, @y, 300000, 60000,  45000),
-    ('D01', @m, @y, 250000, 30000,  22000),
-    ('E01', @m, @y, 150000, 20000,  18000);
-END
-GO
+-- Centers and budgets intentionally start empty. Create them through the
+-- Super Admin center-management flow so no demo location reaches production.
 
 -- ── VERIFY ────────────────────────────────────────────────────
 SELECT 'centers'       AS tbl, COUNT(*) AS rows FROM centers

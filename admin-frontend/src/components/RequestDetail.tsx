@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { RequestItem } from "./models";
 import { typeLabels } from "./models";
 import { typeIcon, priorityTone, statusTone, fmtDateTime, fmtINR, relTime } from "./requestMeta";
-import { companyByCode } from "./company";
 import { detailRows } from "./RequestForms";
 import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, ShieldCheck, Undo2 } from "lucide-react";
 
@@ -22,7 +21,6 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
   const Icon = typeIcon[request.type];
   const pri = priorityTone[request.priority];
   const st = statusTone[request.status];
-  const company = companyByCode(request.company);
   const isVerifierStage = request.status === "awaiting_verification";
   const isAdminStage = request.status === "pending" || request.status === "queued" || request.status === "info_requested";
   const canActAdmin = viewMode === "admin" && isAdminStage;
@@ -65,9 +63,9 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
           <span className={`px-2 py-0.5 text-[10px] font-medium rounded border ${st.bg} ${st.text}`}>{st.label}</span>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded border ${company.tone}`}>
-            <Building2 className="w-3 h-3" /> {company.name} · <span className="font-mono">{company.code}</span>
-          </span>
+          {request.company && <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded border border-slate-200 bg-slate-50 text-slate-700">
+            <Building2 className="w-3 h-3" /> {request.company}
+          </span>}
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded border ${pri.bg} ${pri.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${pri.dot}`} /> {pri.label} priority
           </span>

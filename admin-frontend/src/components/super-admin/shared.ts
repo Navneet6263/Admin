@@ -2,15 +2,13 @@
 import { type RequestItem, type RequestType } from "@/components/models";
 import { fmtINR } from "@/components/requestMeta";
 
-export const SA = { id: "SA-001", name: "Vikram Rathore", role: "Chief Operating Officer" };
-export const actorTag = () => `${SA.name} (${SA.id})`;
-export const autoNote = (verb: string, userNote: string) => {
+export const autoNote = (actor: string, verb: string, userNote: string) => {
   const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  const head = `${verb} by ${actorTag()} · ${ts} IST · Super Admin override`;
+  const head = `${verb} by ${actor} · ${ts} IST · Super Admin override`;
   return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
 };
 
-export type Tab = "overview" | "analytics" | "inventory" | "override" | "anomalies" | "team" | "centers";
+export type Tab = "overview" | "analytics" | "inventory" | "override" | "anomalies" | "team" | "centers" | "policies";
 
 export interface UserRow {
   id: number; name: string; email: string; role: string;
@@ -21,32 +19,7 @@ export interface CenterRow {
   id: number; code: string; name: string; city: string; company: string; is_active: boolean;
 }
 
-// ---------- Synthetic 12-month history ----------
-export const MONTHS = ["Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul"];
 export const CATS: RequestType[] = ["travel","courier","stationery","visiting_card","id_card","meeting_room","fooding"];
-
-const seeded = (i: number, j: number) => { const x = Math.sin(i*928.37 + j*17.13)*10000; return x - Math.floor(x); };
-const baseSpend: Record<RequestType, number> = {
-  travel: 90000, courier: 6000, stationery: 12000,
-  visiting_card: 4000, id_card: 3000, meeting_room: 0, fooding: 15000,
-};
-export const heat = MONTHS.map((_, mi) => CATS.map((c, ci) => {
-  const base = baseSpend[c];
-  const variance = 0.4 + seeded(mi + 3, ci + 7) * 1.5;
-  const seasonal = c === "travel" && (mi === 3 || mi === 11) ? 1.8 : 1;
-  return Math.round(base * variance * seasonal);
-}));
-export const monthTotals = heat.map(row => row.reduce((a,b) => a+b, 0));
-export const catTotals   = CATS.map((_, ci) => heat.reduce((a, row) => a + row[ci], 0));
-export const grandTotal  = monthTotals.reduce((a,b) => a+b, 0);
-export const thisMonth   = monthTotals.at(-1)!;
-export const lastMonth   = monthTotals.at(-2)!;
-export const monthDelta  = ((thisMonth - lastMonth) / lastMonth) * 100;
-
-const last6 = monthTotals.slice(-6);
-export const avg6     = last6.reduce((a,b)=>a+b,0)/6;
-export const slope    = (last6.at(-1)! - last6[0]) / 5;
-export const forecast = [1,2,3].map(i => Math.max(0, Math.round(avg6 + slope * (2.5 + i))));
 
 export const heatColor = (v: number, maxCell: number) => {
   const t = v / maxCell;
@@ -70,10 +43,12 @@ export function buildHistory(requests: RequestItem[]) {
     if (month >= 0 && cat >= 0 && row.status !== "rejected") values[month][cat] += row.amount ?? 0;
   });
   const totals = values.map(row => row.reduce((s,v) => s+v, 0));
+  const categoryTotals = CATS.map((_, index) => values.reduce((sum, row) => sum + row[index], 0));
   const average = totals.slice(-6).reduce((s,v) => s+v, 0) / 6;
   const sl = (totals.at(-1)! - totals.at(-6)!) / 5;
   return {
     MONTHS: labels, heat: values, monthTotals: totals,
+    catTotals: categoryTotals,
     grandTotal: totals.reduce((s,v) => s+v, 0),
     thisMonth: totals.at(-1) ?? 0,
     lastMonth: totals.at(-2) ?? 0,

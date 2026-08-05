@@ -2,15 +2,16 @@ import { useMemo } from "react";
 import { Building2 } from "lucide-react";
 import { PeopleInsights } from "@/components/insights/PeopleInsights";
 import { typeLabels, typeCategory, type RequestItem } from "@/components/models";
-import { companies } from "@/components/company";
+import { useCompanies } from "@/lib/directory";
 import { typeIcon } from "@/components/requestMeta";
-import { CATS, catTotals, grandTotal, heatColor, fmtINR, buildHistory } from "./shared";
+import { CATS, heatColor, fmtINR, buildHistory } from "./shared";
 
 export function OverviewTab({ requests, history }: {
   requests: RequestItem[];
   history: ReturnType<typeof buildHistory>;
 }) {
-  const { MONTHS: labels, heat: h, monthTotals: mt } = history;
+  const companies = useCompanies();
+  const { MONTHS: labels, heat: h, monthTotals: mt, catTotals, grandTotal } = history;
   const maxCell = Math.max(...h.flat(), 1);
 
   const companySpend = useMemo(() =>
@@ -45,7 +46,7 @@ export function OverviewTab({ requests, history }: {
               <div key={c.code} className="border border-slate-200/70 rounded-md p-3">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] text-slate-500">{c.code}</span>
-                  <span className="text-[10px] text-slate-400">{c.teams.length} teams</span>
+                  <span className="text-[10px] text-slate-400">Database entity</span>
                 </div>
                 <p className="text-xs font-semibold text-slate-800 truncate mt-1">{c.name}</p>
                 <p className="font-display text-lg font-semibold text-slate-900 mt-1 tabular-nums">{fmtINR(s.spend)}</p>
@@ -110,7 +111,7 @@ export function OverviewTab({ requests, history }: {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
           {CATS.map((c, ci) => {
             const v = catTotals[ci];
-            const pct = (v / grandTotal) * 100;
+            const pct = grandTotal > 0 ? (v / grandTotal) * 100 : 0;
             const Icon = typeIcon[c];
             const colorMap: Record<string, string> = {
               finance: "bg-rose-500", logistics: "bg-indigo-500",

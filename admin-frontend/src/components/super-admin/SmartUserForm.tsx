@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { UserPlus } from "lucide-react";
 import { request } from "@/lib/api";
+import { CenterCombobox } from "@/components/CenterCombobox";
 
 interface SmartUserFormProps {
   companiesList: Array<{ id: number; code: string; name: string; legal_name: string }>;
@@ -19,13 +20,22 @@ const ROLE_CARDS = [
     active: 'border-sky-500 bg-sky-100 ring-2 ring-sky-300',
   },
   {
-    role: 'admin',
+    role: 'center_admin',
     label: 'Center Admin',
-    sub: 'Approves requests for their center. Must be linked to a center.',
+    sub: 'Approves requests for their assigned center only.',
     icon: '🏢',
     color: 'indigo',
     border: 'border-indigo-200 bg-indigo-50',
     active: 'border-indigo-500 bg-indigo-100 ring-2 ring-indigo-300',
+  },
+  {
+    role: 'hq_admin',
+    label: 'HQ Admin',
+    sub: 'Group / HQ request queue, inventory & escalations.',
+    icon: '🏛️',
+    color: 'slate',
+    border: 'border-slate-300 bg-slate-50',
+    active: 'border-slate-600 bg-slate-100 ring-2 ring-slate-400',
   },
   {
     role: 'verifier',
@@ -38,12 +48,19 @@ const ROLE_CARDS = [
   },
   {
     role: 'finance',
-    label: 'Finance',
-    sub: 'Fund release, treasury & payment authorization.',
+    label: 'Finance Executive',
+    sub: 'Routine payment updates and verification within policy limits.',
     icon: '💰',
     color: 'emerald',
     border: 'border-emerald-200 bg-emerald-50',
     active: 'border-emerald-500 bg-emerald-100 ring-2 ring-emerald-300',
+  },
+  {
+    role: 'finance_head',
+    label: 'Head Finance',
+    sub: 'High-value verification, exceptions and financial analytics.',
+    icon: '₹', color: 'teal', border: 'border-teal-200 bg-teal-50',
+    active: 'border-teal-500 bg-teal-100 ring-2 ring-teal-300',
   },
   {
     role: 'super_admin',
@@ -72,9 +89,9 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Load centers when admin or employee role selected
+  // Load centers when center_admin or employee role selected
   useEffect(() => {
-    if ((role === 'admin' || role === 'employee') && centers.length === 0) {
+    if ((role === 'center_admin' || role === 'employee' || role === 'hq_admin') && centers.length === 0) {
       request<Array<{ id: number; code: string; name: string; city: string }>>('/api/centers')
         .then(setCenters).catch(console.error);
     }
@@ -82,8 +99,8 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
 
   const selectedCard = ROLE_CARDS.find(c => c.role === role);
 
-  const needsCenter  = role === 'admin' || role === 'employee';
-  const needsDept    = role === 'employee' || role === 'finance' || role === 'verifier';
+  const needsCenter  = role === 'center_admin' || role === 'employee' || role === 'hq_admin';
+  const needsDept    = role === 'employee' || role === 'finance' || role === 'finance_head' || role === 'verifier';
   const needsCompany = role !== 'super_admin';
 
   const handleStep1 = (r: RoleKey) => {
@@ -98,7 +115,7 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
   const handleStep2 = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) { setError('Name and email required'); return; }
-    if (role === 'admin' && !centerCode) { setError('Center Admin ko center assign karna zaroori hai'); return; }
+    if (needsCenter && !centerCode) { setError('Is role ko center assign karna zaroori hai'); return; }
     setError(''); setStep(3);
   };
 
@@ -215,13 +232,13 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Full Name *</label>
                 <input value={name} onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Anjali Mehta"
+                  placeholder="Full name"
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400" required />
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Work Email *</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="e.g. anjali@visionindia.com"
+                  placeholder="Work email"
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400" required />
               </div>
 
@@ -247,30 +264,15 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
               )}
 
               {needsCenter && (
-                <div className={role === 'admin' ? 'sm:col-span-2' : ''}>
+                <div className={needsCenter ? 'sm:col-span-2' : ''}>
                   <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                    Home Center {role === 'admin' ? '*' : '(optional)'}
-                    {role === 'admin' && (
+                    Home Center {needsCenter ? '*' : '(optional)'}
+                    {needsCenter && (
                       <span className="ml-2 text-rose-500 font-normal">— Center Admin ka center zaroori hai</span>
                     )}
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {centers.length === 0 && (
-                      <div className="col-span-full text-xs text-slate-400 py-2">Loading centers…</div>
-                    )}
-                    {centers.map(c => (
-                      <button
-                        key={c.code}
-                        type="button"
-                        onClick={() => setCenterCode(c.code)}
-                        className={`text-left p-3 rounded-lg border-2 transition-all ${centerCode === c.code ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-300' : 'border-slate-200 bg-white hover:border-indigo-300'}`}
-                      >
-                        <div className="font-mono text-xs font-bold text-indigo-600">{c.code}</div>
-                        <div className="text-xs font-semibold text-slate-700 mt-0.5">{c.name}</div>
-                        <div className="text-[10px] text-slate-400">{c.city}</div>
-                      </button>
-                    ))}
-                  </div>
+                  <CenterCombobox centers={centers} value={centerCode} onChange={setCenterCode}
+                    placeholder={centers.length ? "Search center, city or code…" : "Loading centers…"} required={needsCenter} />
                 </div>
               )}
             </div>

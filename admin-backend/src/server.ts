@@ -16,6 +16,11 @@ import companiesRoutes    from './routes/companies';
 import centersRoutes      from './routes/centers';
 import centerAdminRoutes  from './routes/centerAdmin';
 import dashboardRoutes    from './routes/dashboard';
+import workflowRoutes     from './routes/workflow';
+import policyRoutes       from './routes/policies';
+import paymentRoutes      from './routes/payments';
+import notificationRoutes from './routes/notifications';
+import { createPaymentReminders } from './services/notifications';
 
 const app = express();
 
@@ -27,11 +32,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/teams', teamsRoutes);
 app.use('/api/companies', companiesRoutes);
 app.use('/api/centers',        centersRoutes);
-app.use('/api/center-admin',   requireAuth('admin', 'super_admin'), centerAdminRoutes);
-app.use('/api/dashboard',      requireAuth('admin', 'super_admin'), dashboardRoutes);
-app.use('/api/requests',       requireAuth('employee', 'admin', 'finance', 'verifier', 'super_admin'), requestRoutes);
-app.use('/api/inventory',      requireAuth('employee', 'admin', 'verifier', 'finance', 'super_admin'), inventoryRoutes);
-app.use('/api/admin',          requireAuth('admin', 'finance'), adminRoutes);
+app.use('/api/notifications',  requireAuth(), notificationRoutes);
+app.use('/api/workflow',       requireAuth('center_admin','hq_admin','admin','super_admin'), workflowRoutes);
+app.use('/api/payments',       requireAuth('center_admin','hq_admin','admin','finance','finance_head','super_admin'), paymentRoutes);
+app.use('/api/super-admin/policies', requireAuth('super_admin'), policyRoutes);
+app.use('/api/center-admin',   requireAuth('center_admin', 'super_admin'), centerAdminRoutes);
+app.use('/api/dashboard',      requireAuth('hq_admin', 'admin', 'super_admin'), dashboardRoutes);
+app.use('/api/requests',       requireAuth('employee', 'hq_admin', 'admin', 'center_admin', 'finance', 'verifier', 'super_admin'), requestRoutes);
+app.use('/api/inventory',      requireAuth('employee', 'hq_admin', 'admin', 'center_admin', 'verifier', 'finance', 'super_admin'), inventoryRoutes);
+app.use('/api/admin',          requireAuth('hq_admin', 'admin'), adminRoutes);
 app.use('/api/employee',       requireAuth('employee'), employeeRoutes);
 app.use('/api/verifier',       requireAuth('verifier'), verifierRoutes);
 app.use('/api/super-admin/users', requireAuth('super_admin'), usersRoutes);
@@ -43,6 +52,8 @@ app.get('/health', (_req, res) =>
 
 const PORT = 3001;
 
-connectDB().then(() =>
+connectDB().then(() => {
+  void createPaymentReminders().catch(console.error);
+  setInterval(() => void createPaymentReminders().catch(console.error), 60_000).unref();
   app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`))
-);
+});

@@ -148,3 +148,26 @@
     color: var(--color-foreground);
   }
 }
+
+.request-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(15 23 42 / 55%) transparent;
+}
+
+.request-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.request-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.request-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(15 23 42 / 55%);
+  border-radius: 999px;
+}
+
+.request-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(30 41 59 / 75%);
+}

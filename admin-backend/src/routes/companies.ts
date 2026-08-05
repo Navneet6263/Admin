@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache } from '../db';
+import { requireAuth } from '../auth';
 
 const router = Router();
 
@@ -20,17 +21,12 @@ router.get('/', async (_req: Request, res: Response) => {
     res.json(result.recordset);
   } catch (err) {
     console.error(err);
-    // Fallback if table not created yet
-    res.json([
-      { id: 1, code: 'VI', name: 'Vision India', legal_name: 'Vision India Pvt. Ltd.' },
-      { id: 2, code: 'JJ', name: 'Just Job', legal_name: 'Just Job Services Pvt. Ltd.' },
-      { id: 3, code: 'LS', name: 'Live Skills', legal_name: 'Live Skills Education Pvt. Ltd.' },
-    ]);
+    res.status(500).json({ error: 'Companies query failed' });
   }
 });
 
 // ── POST /api/companies/create — Super Admin creates a new Company ──────────
-router.post('/create', async (req: Request, res: Response) => {
+router.post('/create', requireAuth('super_admin'), async (req: Request, res: Response) => {
   const { name, code, legal_name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Company name is required' });
 
@@ -39,7 +35,7 @@ router.post('/create', async (req: Request, res: Response) => {
 
   try {
     const result = await pool.request()
-      .input('code', mssql.Varchar(10), compCode)
+      .input('code', mssql.VarChar(10), compCode)
       .input('name', mssql.NVarChar(100), name.trim())
       .input('legal_name', mssql.NVarChar(150), legalName)
       .query(`

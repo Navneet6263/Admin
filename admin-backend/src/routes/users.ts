@@ -29,8 +29,13 @@ router.post('/', async (req: Request, res: Response) => {
   if (!email?.trim() || !name?.trim() || !password?.trim())
     return res.status(400).json({ error: 'Email, name, and password are required' });
 
-  const validRoles: Role[] = ['employee', 'admin', 'finance', 'verifier', 'super_admin'];
+  const validRoles: Role[] = [
+    'employee', 'admin', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
+  ];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid user role' });
+  if ((role === 'center_admin' || role === 'hq_admin') && !String(center_code || '').trim()) {
+    return res.status(400).json({ error: 'center_code is required for this admin role' });
+  }
 
   try {
     const passwordHash = hashPassword(password.trim());

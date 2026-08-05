@@ -1,5 +1,6 @@
 import mssql from 'mssql';
 import dotenv from 'dotenv';
+import { ensureWorkflowSchema } from './migrations/workflow';
 
 dotenv.config();
 
@@ -83,37 +84,10 @@ async function runMigrations() {
         ALTER TABLE teams ALTER COLUMN company NVARCHAR(100) NOT NULL;
     `);
 
-    // Seed default centers if empty
-    const existing = await pool.request().query(`SELECT COUNT(*) AS n FROM centers`);
-    if (existing.recordset[0].n === 0) {
-      await pool.request().query(`
-        INSERT INTO centers (code,name,city,company) VALUES
-          ('A11','Noida HQ','Noida','VT'),
-          ('B01','Patna Center','Patna','VT'),
-          ('C01','Mumbai Office','Mumbai','VT'),
-          ('D01','Bangalore Center','Bangalore','VT'),
-          ('E01','Hyderabad Center','Hyderabad','VT')`);
-
-      // Seed current-month budgets
-      await pool.request().query(`
-        INSERT INTO center_budgets (center_code,month,year,allocated,committed,spent) VALUES
-          ('A11',MONTH(GETDATE()),YEAR(GETDATE()),500000,85000,62000),
-          ('B01',MONTH(GETDATE()),YEAR(GETDATE()),200000,40000,38000),
-          ('C01',MONTH(GETDATE()),YEAR(GETDATE()),300000,60000,45000),
-          ('D01',MONTH(GETDATE()),YEAR(GETDATE()),250000,30000,22000),
-          ('E01',MONTH(GETDATE()),YEAR(GETDATE()),150000,20000,18000)`);
-    }
-
-    // Clean up old sample seed requests so ONLY real requests created by users remain
-    await pool.request().query(`
-      DELETE FROM approvals WHERE request_id IN (
-        SELECT id FROM requests WHERE user_id = 1 OR ref_id LIKE 'REQ-2026-000%' OR ref_id LIKE 'REQ-2026-001%'
-      );
-      DELETE FROM requests WHERE user_id = 1 OR ref_id LIKE 'REQ-2026-000%' OR ref_id LIKE 'REQ-2026-001%';
-    `);
+    await ensureWorkflowSchema(pool);
     clearCache();
 
-    console.log('✅ Migrations applied & mock seed requests cleaned');
+    console.log('✅ Migrations applied');
   } catch (err) {
     console.error('⚠️  Migration warning (non-fatal):', (err as Error).message);
   }

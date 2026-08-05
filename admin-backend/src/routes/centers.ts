@@ -1,11 +1,20 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache } from '../db';
+import { requireAuth } from '../auth';
 
 const router = Router();
 
+router.get('/public', async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.request().query(`SELECT id,code,name,city,company,is_active
+      FROM centers WHERE is_active=1 ORDER BY city,name`);
+    res.json(result.recordset);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Centers unavailable' }); }
+});
+
 // ── GET /api/centers — Fetch all centers with employee counts ────────────────
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', requireAuth('center_admin', 'hq_admin', 'admin', 'super_admin'), async (_req: Request, res: Response) => {
   const cacheKey = 'centers:all';
   const cached = getCached<unknown[]>(cacheKey);
   if (cached) return res.json(cached);
@@ -32,17 +41,29 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // ── POST /api/centers/create — Super Admin creates a new Center ──────────────
-router.post('/create', async (req: Request, res: Response) => {
+router.post('/create', requireAuth('super_admin'), async (req: Request, res: Response) => {
   const { code, name, city, company, initial_budget } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Center name is required' });
+  if (!city?.trim()) return res.status(400).json({ error: 'Center city is required' });
+  if (!company?.trim()) return res.status(400).json({ error: 'Center company is required' });
 
-  const centerCity = city?.trim() || 'Noida';
-  const centerCompany = company?.trim() || 'GROUP';
+  const centerCity = city.trim();
+  const centerCompany = company.trim();
   const centerCode = (code?.trim() || name.trim().replace(/\s+/g, '_')).toUpperCase().slice(0, 10);
-  const budget = parseFloat(initial_budget) || 200000;
+  const budget = initial_budget === undefined || initial_budget === '' ? 0 : Number(initial_budget);
+  if (!/^[A-Z0-9_-]{2,10}$/.test(centerCode)) return res.status(400).json({ error: 'Center code must be 2-10 letters/numbers' });
+  if (!Number.isFinite(budget) || budget < 0) return res.status(400).json({ error: 'Initial budget must be non-negative' });
 
+  const tx = pool.transaction();
   try {
-    const result = await pool.request()
+    await tx.begin();
+    const validCompany = await tx.request().input('company', mssql.NVarChar(100), centerCompany)
+      .query(`SELECT 1 ok FROM companies WHERE name=@company`);
+    if (!validCompany.recordset.length) {
+      await tx.rollback();
+      return res.status(400).json({ error: 'Select a valid company from the company master' });
+    }
+    const result = await tx.request()
       .input('code', mssql.NVarChar(10), centerCode)
       .input('name', mssql.NVarChar(100), name.trim())
       .input('city', mssql.NVarChar(80), centerCity)
@@ -54,7 +75,7 @@ router.post('/create', async (req: Request, res: Response) => {
       `);
 
     // Create current month budget entry
-    await pool.request()
+    await tx.request()
       .input('center_code', mssql.NVarChar(10), centerCode)
       .input('month', mssql.TinyInt, new Date().getMonth() + 1)
       .input('year', mssql.SmallInt, new Date().getFullYear())
@@ -64,10 +85,17 @@ router.post('/create', async (req: Request, res: Response) => {
         INSERT INTO center_budgets (center_code, month, year, allocated, committed, spent)
         VALUES (@center_code, @month, @year, @allocated, 0, 0)
       `);
+    await tx.request().input('center_code', mssql.NVarChar(10), centerCode).query(`
+      INSERT INTO center_inventory(center_code,sku,qty,reserved_qty)
+      SELECT @center_code,sku,0,0 FROM inventory
+      WHERE NOT EXISTS(SELECT 1 FROM center_inventory WHERE center_code=@center_code AND center_inventory.sku=inventory.sku)
+    `);
 
+    await tx.commit();
     clearCache('centers:all');
     res.status(201).json(result.recordset[0]);
   } catch (err: unknown) {
+    try { await tx.rollback(); } catch { /* transaction not active */ }
     console.error(err);
     if (err instanceof Error && (err.message.includes('UNIQUE') || err.message.includes('PRIMARY'))) {
       return res.status(409).json({ error: `Center code "${centerCode}" already exists` });
@@ -77,7 +105,7 @@ router.post('/create', async (req: Request, res: Response) => {
 });
 
 // ── PUT /api/centers/:id — Super Admin edits an existing Center ─────────────
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAuth('super_admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const { name, city, company, is_active } = req.body;
 
@@ -111,8 +139,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/centers/join-by-code — Employee joins a center using Center Code ──
-router.post('/join-by-code', async (req: Request, res: Response) => {
-  const { user_id, center_code } = req.body;
+router.post('/join-by-code', requireAuth('employee'), async (req: Request, res: Response) => {
+  const { center_code } = req.body;
+  const user_id = req.user!.id;
   if (!user_id || !center_code?.trim()) {
     return res.status(400).json({ error: 'User ID and Center Code are required' });
   }

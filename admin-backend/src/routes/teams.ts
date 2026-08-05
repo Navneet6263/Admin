@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache } from '../db';
+import { requireAuth } from '../auth';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/teams/create — Super Admin creates a new Team ─────────────────
-router.post('/create', async (req: Request, res: Response) => {
+router.post('/create', requireAuth('super_admin'), async (req: Request, res: Response) => {
   const { name, company = 'VT' } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Team name is required' });
 

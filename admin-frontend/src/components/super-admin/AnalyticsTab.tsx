@@ -1,11 +1,13 @@
 import { Zap, Activity, ArrowUpRight, Sparkles } from "lucide-react";
 import { typeLabels, type RequestItem } from "@/components/models";
 import { typeIcon } from "@/components/requestMeta";
-import { MONTHS, CATS, heat, monthTotals, forecast, avg6, fmtINR } from "./shared";
+import { CATS, buildHistory, fmtINR } from "./shared";
+import { ExpenseAnalytics } from "@/components/analytics/ExpenseAnalytics";
 
-export function AnalyticsTab({ requests }: { requests: RequestItem[] }) {
+export function AnalyticsTab({ requests, history }: { requests: RequestItem[]; history: ReturnType<typeof buildHistory> }) {
+  const { MONTHS, heat, monthTotals, forecast, avg6 } = history;
   const trend = [...monthTotals, ...forecast];
-  const trendMax = Math.max(...trend);
+  const trendMax = Math.max(...trend, 1);
   const forecastStart = monthTotals.length;
 
   const tatByCat = CATS.map(c => {
@@ -25,10 +27,11 @@ export function AnalyticsTab({ requests }: { requests: RequestItem[] }) {
   ];
   const funnelMax = funnel[0].n;
   const projected3M = forecast.reduce((a,b) => a+b, 0);
-  const projDelta = ((projected3M/3 - avg6) / avg6) * 100;
+  const projDelta = avg6 > 0 ? ((projected3M/3 - avg6) / avg6) * 100 : 0;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
+      <ExpenseAnalytics />
       {/* Forecast card */}
       <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-lg p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -43,7 +46,7 @@ export function AnalyticsTab({ requests }: { requests: RequestItem[] }) {
             </p>
           </div>
           <div className="text-right text-[11px] text-slate-300">
-            <p>Model · linear trend on last 6 months</p>
+            <p>Projection · calculated from database spend</p>
             <p className="mt-1">Confidence · <span className="text-white">medium</span></p>
           </div>
         </div>

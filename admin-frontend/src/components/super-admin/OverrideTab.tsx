@@ -1,7 +1,7 @@
 import { ShieldCheck, Crown, CheckCircle2, Ban, RotateCcw } from "lucide-react";
 import { RequestRow } from "@/components/RequestRow";
 import { RequestDetail } from "@/components/RequestDetail";
-import { companies } from "@/components/company";
+import { useCompanies } from "@/lib/directory";
 import { type RequestItem, type RequestStatus } from "@/components/models";
 
 interface Props {
@@ -19,13 +19,14 @@ export function OverrideTab({
   list, selected, companyFilter, setCompanyFilter,
   statusFilter, setStatusFilter, onSelect, onAction,
 }: Props) {
+  const companies = useCompanies();
   return (
     <div className="max-w-[1400px] mx-auto">
       <div className="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-md flex items-start gap-2">
         <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
         <div className="text-xs text-indigo-900">
           <b>Override authority.</b> You can force any request into any state — force-approve, force-reject, close, or send back to Admin.
-          Every action is signed as <span className="font-mono">SA-001</span> and appears in the audit trail.
+          Every action is signed with the authenticated Super Admin identity and appears in the audit trail.
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import { pool, getCached, setCache } from '../db';
 import { requireAuth } from '../auth';
 
 const router = Router();
-router.use(requireAuth('super_admin', 'admin'));
+router.use(requireAuth('super_admin', 'hq_admin', 'admin'));
 
 // ── GET /api/dashboard/command-center ────────────────────────
 // Returns health score for every center (Green / Amber / Red)
@@ -54,7 +54,7 @@ router.get('/command-center', async (_req: Request, res: Response) => {
       return { ...row, burn_pct: Math.round(burnPct), health };
     });
 
-    setCache('cmd:health', data, 60); // 60s cache
+    setCache('cmd:health', data);
     res.json(data);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Command center query failed' }); }
 });
@@ -105,7 +105,7 @@ router.get('/burn-rate', async (_req: Request, res: Response) => {
       };
     });
 
-    setCache('cmd:burn', data, 120);
+    setCache('cmd:burn', data);
     res.json(data);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Burn rate query failed' }); }
 });

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { request } from "@/lib/api";
+import { request, session } from "@/lib/api";
 import {
   Activity, TrendingUp, AlertTriangle, CheckCircle2,
   MapPin, Clock, IndianRupee, Zap, BarChart3, Users, ArrowUpRight
@@ -17,7 +17,6 @@ export const Route = createFileRoute("/command-center")({
   component: CommandCenter,
 });
 
-const API = "http://localhost:3001";
 const fmt = (n: number) => `₹${(n / 1000).toFixed(0)}k`;
 const fmtFull = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -148,6 +147,7 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
 }
 
 function CommandCenter() {
+  const [sessionUser, setSessionUser] = useState(session.user);
   const [centers, setCenters]   = useState<CenterHealth[]>([]);
   const [burnData, setBurnData] = useState<BurnRate[]>([]);
   const [peers, setPeers]       = useState<PeerRow[]>([]);
@@ -159,10 +159,10 @@ function CommandCenter() {
   const fetchAll = useCallback(async () => {
     try {
       const [h, b, p, a] = await Promise.all([
-        request<CenterHealth[]>(`${API}/api/dashboard/command-center`),
-        request<BurnRate[]>(`${API}/api/dashboard/burn-rate`),
-        request<PeerRow[]>(`${API}/api/dashboard/peer-comparison`),
-        request<ActivityItem[]>(`${API}/api/dashboard/activity-feed`),
+        request<CenterHealth[]>("/api/dashboard/command-center"),
+        request<BurnRate[]>("/api/dashboard/burn-rate"),
+        request<PeerRow[]>("/api/dashboard/peer-comparison"),
+        request<ActivityItem[]>("/api/dashboard/activity-feed"),
       ]);
       setCenters(h); setBurnData(b); setPeers(p); setActivity(a);
       setLastUpdated(new Date());
@@ -170,7 +170,7 @@ function CommandCenter() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void fetchAll(); }, [fetchAll]);
+  useEffect(() => { void fetchAll(); void session.me().then(setSessionUser); }, [fetchAll]);
   // Auto-refresh every 60s
   useEffect(() => { const t = setInterval(fetchAll, 60000); return () => clearInterval(t); }, [fetchAll]);
 
@@ -178,7 +178,7 @@ function CommandCenter() {
   const amberCount = centers.filter(c => c.health === "amber").length;
 
   return (
-    <DashboardLayout>
+    <DashboardLayout workspace="Command Center" currentUser={sessionUser?.name ?? ""} role={sessionUser?.dept || "Executive Oversight"}>
       <div style={{ minHeight: "100vh", background: "#070c19", fontFamily: "'Inter', sans-serif", padding: "32px 28px" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 36 }}>

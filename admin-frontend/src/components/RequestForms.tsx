@@ -6,7 +6,7 @@ import { fmtINR } from "./requestMeta";
 
 /* ---------- shared field helpers ---------- */
 const inputCls =
-  "w-full text-sm font-semibold border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 bg-white/95 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/70 focus:border-indigo-300 shadow-sm transition-all";
+  "w-full text-sm font-medium border border-white/15 rounded-xl px-3.5 py-2.5 text-slate-100 bg-slate-900/55 placeholder:text-slate-400 focus:outline-none focus:bg-slate-900/75 focus:ring-2 focus:ring-indigo-400/35 focus:border-indigo-300/50 transition-all [color-scheme:dark]";
 const labelCls = "text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-1.5 block";
 const sectionCls = "p-3.5 rounded-2xl border border-white/15 bg-white/8 space-y-3";
 
@@ -52,12 +52,12 @@ export function VisitingCardForm({ value, onChange }: { value: VCState; onChange
         <div className="grid grid-cols-3 gap-2">
           {VC_TEMPLATES.map((t) => (
             <button key={t.id} type="button" onClick={() => set("template", t.id)}
-              className={`p-2 border rounded-lg text-left transition-all ${value.template === t.id ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200 hover:border-slate-400"}`}>
+              className={`p-2 border rounded-lg text-left transition-all ${value.template === t.id ? "border-indigo-400/60 bg-indigo-500/15 ring-2 ring-indigo-400/20" : "border-white/15 bg-slate-900/30 hover:bg-slate-800/50 hover:border-white/25"}`}>
               <div className="h-12 rounded flex flex-col justify-center px-2" style={{ background: t.surface, borderTop: `3px solid ${t.accent}` }}>
                 <div className="text-[9px] font-semibold" style={{ color: t.accent }}>YOUR NAME</div>
                 <div className="text-[7px]" style={{ color: t.body }}>Designation</div>
               </div>
-              <p className="text-[10px] font-semibold text-slate-700 mt-1.5">{t.name}</p>
+              <p className="text-[10px] font-semibold text-slate-300 mt-1.5">{t.name}</p>
             </button>
           ))}
         </div>
@@ -81,7 +81,7 @@ export function VisitingCardForm({ value, onChange }: { value: VCState; onChange
 
       <div>
         <label className={labelCls}>Live preview</label>
-        <div className="rounded-xl border border-slate-200 p-5" style={{ background: "#eef2f6" }}>
+        <div className="rounded-xl border border-white/10 bg-slate-900/35 p-5">
           <div className="mx-auto max-w-sm rounded-lg shadow-md overflow-hidden" style={{ background: tpl.surface }}>
             <div style={{ height: 4, background: tpl.accent }} />
             <div className="p-5">
@@ -340,10 +340,10 @@ export function MeetingForm({ value, onChange }: { value: MeetingState; onChange
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
               val
                 ? "border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-500/30"
-                : "border-white/50 bg-white/50 backdrop-blur-md text-slate-600 hover:bg-white/80 hover:border-indigo-300"
+                : "border-white/15 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60 hover:border-indigo-300/40"
             }`}>
             <span className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 ${
-              val ? "border-white bg-white" : "border-slate-400 bg-white/50"
+              val ? "border-white bg-white" : "border-slate-500 bg-slate-800/70"
             }`}>
               {val && <span className="w-2 h-2 rounded-sm bg-indigo-600 block" />}
             </span>
@@ -508,4 +508,3 @@ export function detailRows(type: string, details: Record<string, unknown> | unde
       return [];
   }
 }
-

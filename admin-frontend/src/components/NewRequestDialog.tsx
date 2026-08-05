@@ -3,6 +3,7 @@ import { X, Minus, Plus, AlertTriangle, Sparkles, CheckCircle2, ArrowRight } fro
 import { typeLabels, type Priority, type RequestType, type StationeryPick } from "./models";
 import { typeIcon, fmtINR } from "./requestMeta";
 import { useInventory, isLow } from "./liveInventory";
+import { CenterCombobox } from "./CenterCombobox";
 import {
   VisitingCardForm, emptyVC, vcValid, summarizeVC, type VCState,
   TravelForm, emptyTravel, travelValid, summarizeTravel, type TravelState,
@@ -23,17 +24,20 @@ import bgMeeting from "@/assets/category-bg/meeting.jpg";
 interface Props {
   open: boolean;
   initialType?: RequestType | null;
+  centers?: Array<{ code: string; name: string; city: string }>;
+  homeCenter?: string;
   onClose: () => void;
   onSubmit: (draft: {
     type: RequestType; subject: string; description: string;
     amount: number | null; priority: Priority;
     items?: StationeryPick[]; details?: Record<string, unknown>;
+    request_center_code: string;
   }) => void;
 }
 
 const priorities: Priority[] = ["low", "normal", "high", "urgent"];
 
-export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props) {
+export function NewRequestDialog({ open, initialType, centers = [], homeCenter = "", onClose, onSubmit }: Props) {
   const inventory = useInventory();
   const [type, setType] = useState<RequestType>("id_card");
   const [subject, setSubject] = useState("");
@@ -42,6 +46,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
   const [priority, setPriority] = useState<Priority>("normal");
   const [picks, setPicks] = useState<Record<string, number>>({});
   const [stationeryQuery, setStationeryQuery] = useState("");
+  const [requestCenter, setRequestCenter] = useState(homeCenter);
 
   const [vc, setVc] = useState<VCState>(emptyVC());
   const [travel, setTravel] = useState<TravelState>(emptyTravel());
@@ -54,10 +59,11 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
       setType(initialType ?? "id_card");
       setSubject(""); setDescription(""); setAmount(""); setPriority("normal");
       setPicks({}); setStationeryQuery("");
+      setRequestCenter(homeCenter || centers[0]?.code || "");
       setVc(emptyVC()); setTravel(emptyTravel()); setCourier(emptyCourier());
       setMeeting(emptyMeeting()); setFooding(emptyFooding());
     }
-  }, [open, initialType]);
+  }, [open, initialType, homeCenter, centers]);
 
   const bgImage = useMemo(() => {
     if (type === "travel") {
@@ -106,17 +112,18 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
 
   const submit = () => {
     if (!canSubmit) return;
-    if (isVC) { const { subject: s, description: d } = summarizeVC(vc); onSubmit({ type, subject: s, description: d, amount: null, priority, details: vc as unknown as Record<string, unknown> }); return; }
-    if (isTravel) { const { subject: s, description: d } = summarizeTravel(travel); onSubmit({ type, subject: s, description: d, amount: null, priority, details: travel as unknown as Record<string, unknown> }); return; }
-    if (isCourier) { const { subject: s, description: d } = summarizeCourier(courier); onSubmit({ type, subject: s, description: d, amount: courier.declaredValue ? Number(courier.declaredValue) : null, priority, details: courier as unknown as Record<string, unknown> }); return; }
-    if (isMeeting) { const { subject: s, description: d } = summarizeMeeting(meeting); onSubmit({ type, subject: s, description: d, amount: null, priority, details: meeting as unknown as Record<string, unknown> }); return; }
-    if (isFooding) { const { subject: s, description: d, amount: est } = summarizeFooding(fooding); onSubmit({ type, subject: s, description: d, amount: est || null, priority, details: fooding as unknown as Record<string, unknown> }); return; }
+    const emit = (draft: Omit<Parameters<Props["onSubmit"]>[0], "request_center_code">) => onSubmit({ ...draft, request_center_code: requestCenter });
+    if (isVC) { const { subject: s, description: d } = summarizeVC(vc); emit({ type, subject: s, description: d, amount: null, priority, details: vc as unknown as Record<string, unknown> }); return; }
+    if (isTravel) { const { subject: s, description: d } = summarizeTravel(travel); emit({ type, subject: s, description: d, amount: null, priority, details: travel as unknown as Record<string, unknown> }); return; }
+    if (isCourier) { const { subject: s, description: d } = summarizeCourier(courier); emit({ type, subject: s, description: d, amount: courier.declaredValue ? Number(courier.declaredValue) : null, priority, details: courier as unknown as Record<string, unknown> }); return; }
+    if (isMeeting) { const { subject: s, description: d } = summarizeMeeting(meeting); emit({ type, subject: s, description: d, amount: null, priority, details: meeting as unknown as Record<string, unknown> }); return; }
+    if (isFooding) { const { subject: s, description: d, amount: est } = summarizeFooding(fooding); emit({ type, subject: s, description: d, amount: est || null, priority, details: fooding as unknown as Record<string, unknown> }); return; }
     if (isStationery) {
       const s = subject.trim() || `Stationery order — ${pickedList.length} items (${fmtINR(stationeryTotal)})`;
       const d = pickedList.map(p => `• ${p.name} (${p.sku}) × ${p.qty}`).join("\n") + (description ? `\n\nNote: ${description}` : "");
-      onSubmit({ type, subject: s, description: d, amount: stationeryTotal, priority, items: pickedList }); return;
+      emit({ type, subject: s, description: d, amount: stationeryTotal, priority, items: pickedList }); return;
     }
-    onSubmit({ type, subject: subject.trim(), description: description.trim(), amount: amount ? Number(amount) : null, priority });
+    emit({ type, subject: subject.trim(), description: description.trim(), amount: amount ? Number(amount) : null, priority });
   };
 
   const titleText =
@@ -124,7 +131,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
     : type === "fooding" ? "Corporate Gourmet Catering"
     : type === "visiting_card" ? "Visiting Card Print Studio"
     : type === "id_card" ? "Smart Employee ID Card"
-    : type === "stationery" ? "Office Supplies Catalog"
+    : type === "stationery" ? "Stationery Request"
     : type === "courier" ? "Express Package Dispatch"
     : type === "meeting_room" ? "Executive Boardroom Desk"
     : typeLabels[type];
@@ -138,7 +145,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
     : "Policy verified · Auto-routed";
 
   // Light input style for use inside the dark card
-  const lightInput = "w-full text-sm font-semibold border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 bg-white/95 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/70 focus:border-indigo-300 shadow-sm transition-all";
+  const lightInput = "w-full text-sm font-medium border border-white/15 rounded-xl px-3.5 py-2.5 text-slate-100 bg-slate-900/55 placeholder:text-slate-400 focus:outline-none focus:bg-slate-900/75 focus:ring-2 focus:ring-indigo-400/35 focus:border-indigo-300/50 transition-all [color-scheme:dark]";
 
   return (
     <>
@@ -159,7 +166,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
         {/* ── Close button — top right floating ── */}
-        <button onClick={onClose} className="absolute top-5 right-[405px] z-30 w-9 h-9 grid place-items-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all shadow-lg cursor-pointer">
+        <button onClick={onClose} aria-label="Close new request" className="absolute top-6 right-6 z-30 w-9 h-9 grid place-items-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all shadow-lg cursor-pointer">
           <X className="w-4 h-4" />
         </button>
 
@@ -178,17 +185,20 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
         </div>
 
         {/* ── RIGHT: Floating Dark Glass Form Card ── */}
-        <div className="absolute inset-y-4 right-4 w-[390px] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-white/12 backdrop-blur-2xl">
+        <div className="absolute inset-y-4 right-4 w-[430px] max-w-[calc(100%-2rem)] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-white/12 backdrop-blur-2xl">
 
           {/* Card Header */}
-          <div className="px-5 pt-5 pb-3 border-b border-white/15 shrink-0">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">New Request</p>
-            <p className="text-base font-bold text-white leading-snug">{titleText}</p>
+          <div className="px-4 py-3 pr-14 border-b border-white/15 shrink-0">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-white shrink-0">New Request</p>
+              <span className="text-[10px] text-white/45 truncate">Inventory · {homeCenter || "Unassigned"}</span>
+              <CenterCombobox centers={centers} value={requestCenter} onChange={setRequestCenter} dark className="ml-auto w-48 max-w-[55%]" />
+            </div>
           </div>
 
           {/* Category selector pills */}
-          <div className="px-4 py-3 border-b border-white/10 shrink-0">
-            <div className="flex flex-wrap gap-1.5">
+          <div className="request-scrollbar px-4 py-2 border-b border-white/10 shrink-0 overflow-x-auto">
+            <div className="flex gap-1.5 min-w-max">
               {(Object.keys(typeLabels) as RequestType[]).map(t => {
                 const Icon = typeIcon[t];
                 const active = t === type;
@@ -208,7 +218,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
           </div>
 
           {/* Scrollable form area */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+          <div className="request-scrollbar flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
             {isVC && <VisitingCardForm value={vc} onChange={setVc} />}
             {isTravel && <TravelForm value={travel} onChange={setTravel} />}
@@ -230,7 +240,7 @@ export function NewRequestDialog({ open, initialType, onClose, onSubmit }: Props
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pick items</p>
                       <input value={stationeryQuery} onChange={e => setStationeryQuery(e.target.value)} placeholder="Search…"
-                        className="text-xs bg-white/95 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/70 shadow-sm w-28" />
+                        className="text-xs bg-slate-900/55 border border-white/15 rounded-lg px-2.5 py-1.5 text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/35 w-28" />
                     </div>
                     <div className="border border-white/10 rounded-xl max-h-44 overflow-y-auto divide-y divide-white/5 bg-black/20 backdrop-blur-sm">
                       {filteredInventory.map(i => {

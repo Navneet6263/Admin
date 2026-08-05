@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache, VALID_TYPES } from '../db';
+import { initializeWorkflow } from '../services/workflow';
 
 const router = Router();
 
@@ -8,6 +9,7 @@ const router = Router();
 router.get('/requests/:userId', async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId);
   if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+  if (userId !== req.user?.id) return res.status(403).json({ error: 'You can only view your own requests' });
 
   const cacheKey = `employee:${userId}:requests`;
   const cached = getCached<unknown[]>(cacheKey);
@@ -37,7 +39,8 @@ router.get('/requests/:userId', async (req: Request, res: Response) => {
 
 // ── POST /api/employee/requests ──────────────────────────────────────────────
 router.post('/requests', async (req: Request, res: Response) => {
-  const { user_id, type, subject, description = '', amount, priority = 'normal', details } = req.body;
+  const { type, subject, description = '', amount, priority = 'normal', details, request_center_code } = req.body;
+  const user_id = req.user!.id;
 
   if (!user_id || !type || !VALID_TYPES.includes(type))
     return res.status(400).json({ error: 'user_id and valid type are required' });
@@ -77,6 +80,7 @@ router.post('/requests', async (req: Request, res: Response) => {
 
     const insertedRow = result.recordset[0];
     if (insertedRow?.id) {
+      await initializeWorkflow(insertedRow.id, user_id, request_center_code, type, amount == null ? null : Number(amount));
       try {
         await pool.request()
           .input('request_id', mssql.Int,           insertedRow.id)
@@ -134,13 +138,16 @@ router.patch('/notifications/:id/read', async (req: Request, res: Response) => {
 // ── PATCH /api/employee/requests/:id/cancel ──────────────────────────────────
 router.patch('/requests/:id/cancel', async (req: Request, res: Response) => {
   const reqId = parseInt(req.params.id);
-  const { user_id, note = 'Withdrawn by requester' } = req.body ?? {};
+  const user_id = req.user!.id;
+  const { note = 'Withdrawn by requester' } = req.body ?? {};
   if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
 
   try {
     await pool.request()
       .input('id', mssql.Int, reqId)
-      .query(`UPDATE requests SET status='rejected', updated_at=GETDATE() WHERE id=@id AND status IN ('pending','queued','info_requested')`);
+      .input('uid', mssql.Int, user_id)
+      .query(`UPDATE requests SET status='rejected',workflow_status='withdrawn',updated_at=GETDATE()
+        WHERE id=@id AND user_id=@uid AND status IN ('pending','queued','info_requested')`);
 
     if (user_id) {
       await pool.request()

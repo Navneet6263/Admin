@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { LogOut, Search, Bell, Command, X } from "lucide-react";
+import { LogOut, Search, Command, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { NotificationBell } from "./NotificationBell";
 
 export interface WorkspaceTab {
   key: string;
@@ -82,10 +83,7 @@ export function DashboardLayout({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <button className="w-8 h-8 grid place-items-center rounded-md hover:bg-slate-100 text-slate-500 relative">
-            <Bell className="w-4 h-4" strokeWidth={1.75} />
-            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full" />
-          </button>
+          <NotificationBell />
           <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center text-[10px] font-semibold text-white">
               {initials}

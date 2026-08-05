@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock, AlertTriangle,
-  Flame, Download,
+  TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock,
+  Download, Flame,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { typeLabels, typeCategory, type RequestItem, type RequestType } from "@/components/models";
+import { typeLabels, typeCategory, type RequestItem } from "@/components/models";
 import { typeIcon, fmtINR } from "@/components/requestMeta";
 import { PeopleInsights } from "@/components/insights/PeopleInsights";
-import { getRequests } from "@/lib/api";
+import { getRequests, session } from "@/lib/api";
+import { buildHistory, CATS } from "@/components/super-admin/shared";
+import { AnomaliesTab } from "@/components/super-admin/AnomaliesTab";
 
 export const Route = createFileRoute("/insights")({
   head: () => ({
@@ -20,62 +22,15 @@ export const Route = createFileRoute("/insights")({
   component: Insights,
 });
 
-// ---------- Synthetic 12-month history (deterministic) ----------
-const MONTHS = ["Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul"];
-const CATS: RequestType[] = ["travel","courier","stationery","visiting_card","id_card","meeting_room","fooding"];
-
-// pseudo-random but stable
-const seeded = (i: number, j: number) => {
-  const x = Math.sin(i * 928.37 + j * 17.13) * 10000;
-  return x - Math.floor(x);
-};
-
-const baseSpend: Record<RequestType, number> = {
-  travel: 90000,
-  courier: 6000, stationery: 12000, visiting_card: 4000, id_card: 3000, meeting_room: 0, fooding: 15000,
-};
-
-// heatmap: month x category = ₹
-const heat: number[][] = MONTHS.map((_, mi) =>
-  CATS.map((c, ci) => {
-    const base = baseSpend[c];
-    const variance = 0.4 + seeded(mi + 3, ci + 7) * 1.5; // 0.4x - 1.9x
-    const seasonal = c === "travel" && (mi === 3 || mi === 11) ? 1.8 : 1; // Nov & Jul spike
-      return Math.round(base * variance * seasonal);
-  })
-);
-
-const monthTotals = heat.map(row => row.reduce((a, b) => a + b, 0));
-const catTotals = CATS.map((_, ci) => heat.reduce((a, row) => a + row[ci], 0));
-const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
-const maxCell = Math.max(...heat.flat());
-
-const thisMonth = monthTotals[monthTotals.length - 1];
-const lastMonth = monthTotals[monthTotals.length - 2];
-const monthDelta = ((thisMonth - lastMonth) / lastMonth) * 100;
-
-const heatColor = (v: number) => {
-  const t = v / maxCell;
-  if (t < 0.15) return "bg-slate-50 text-slate-400";
-  if (t < 0.3) return "bg-sky-50 text-sky-700";
-  if (t < 0.5) return "bg-sky-100 text-sky-800";
-  if (t < 0.7) return "bg-indigo-200 text-indigo-900";
-  if (t < 0.85) return "bg-indigo-400 text-white";
-  return "bg-indigo-600 text-white";
-};
-
 function Insights() {
+  const [sessionUser, setSessionUser] = useState(session.user);
   const [hover, setHover] = useState<{ m: number; c: number } | null>(null);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const refresh = useCallback(async () => { try { setRequests(await getRequests('/api/requests')); } catch (error) { console.error(error); } }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); void session.me().then(setSessionUser); }, [refresh]);
   const live = useMemo(() => {
-    const dates = Array.from({ length: 12 }, (_, offset) => new Date(new Date().getFullYear(), new Date().getMonth() - 11 + offset, 1));
-    const labels = dates.map(date => date.toLocaleString('en-IN', { month: 'short' }));
-    const matrix = dates.map(() => CATS.map(() => 0));
-    requests.forEach(row => { const date = new Date(row.createdAt); const index = dates.findIndex(month => month.getFullYear() === date.getFullYear() && month.getMonth() === date.getMonth()); const column = CATS.indexOf(row.type); if (index >= 0 && column >= 0 && row.status !== 'rejected') matrix[index][column] += row.amount ?? 0; });
-    const totals = matrix.map(row => row.reduce((sum, value) => sum + value, 0)); const categories = CATS.map((_, index) => matrix.reduce((sum, row) => sum + row[index], 0));
-    return { MONTHS: labels, heat: matrix, monthTotals: totals, catTotals: categories, grandTotal: totals.reduce((sum, value) => sum + value, 0), maxCell: Math.max(...matrix.flat(), 1), thisMonth: totals.at(-1) ?? 0, lastMonth: totals.at(-2) ?? 0 };
+    const history = buildHistory(requests);
+    return { ...history, maxCell: Math.max(...history.heat.flat(), 1) };
   }, [requests]);
   const { MONTHS, heat, monthTotals, catTotals, grandTotal, maxCell, thisMonth, lastMonth } = live;
   const monthDelta = lastMonth ? (thisMonth - lastMonth) / lastMonth * 100 : 0;
@@ -99,17 +54,17 @@ function Insights() {
     let best = { v: 0, m: 0, c: 0 };
     heat.forEach((row, mi) => row.forEach((v, ci) => { if (v > best.v) best = { v, m: mi, c: ci }; }));
     return best;
-  }, []);
+  }, [heat]);
 
   return (
-    <DashboardLayout workspace="Executive Insights" currentUser="Vikram Rathore" role="Super Admin · Executive Insights">
+    <DashboardLayout workspace="Executive Insights" currentUser={sessionUser?.name ?? ""} role={sessionUser?.dept || "Executive Insights"}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-slate-400">Analytics</p>
             <h1 className="font-display text-2xl font-semibold text-slate-900 mt-1">Spend & Approval Insights</h1>
-            <p className="text-xs text-slate-500 mt-1">Rolling 12 months · {MONTHS[0]} 2025 – {MONTHS[11]} 2026</p>
+            <p className="text-xs text-slate-500 mt-1">Rolling 12 months · live database records</p>
           </div>
           <button className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md hover:bg-slate-50">
             <Download className="w-3.5 h-3.5" /> Export CSV
@@ -271,36 +226,7 @@ function Insights() {
         {/* People analytics — smart per-employee drill-down */}
         <PeopleInsights requests={requests} />
 
-        {/* Alerts */}
-        <div className="bg-white rounded-lg border border-slate-200/70 p-5">
-          <h2 className="font-display font-semibold text-slate-900 mb-3">Anomalies & signals</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 border border-rose-100 bg-rose-50/50 rounded-md">
-              <div className="flex items-center gap-2 text-rose-700 text-xs font-semibold">
-                <AlertTriangle className="w-3.5 h-3.5" /> Travel spike
-              </div>
-              <p className="text-xs text-slate-700 mt-1.5">
-                {MONTHS[11]} travel is <b>{Math.round(((heat[11][0] - heat[10][0]) / heat[10][0]) * 100)}%</b> higher than last month. Q3 offsites likely driver.
-              </p>
-            </div>
-            <div className="p-3 border border-amber-100 bg-amber-50/50 rounded-md">
-              <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold">
-                <Flame className="w-3.5 h-3.5" /> Catering peak
-              </div>
-              <p className="text-xs text-slate-700 mt-1.5">
-                Food & catering peaked at <b>{fmtINR(heat[4][6])}</b> in Dec — festive events cycle. Plan Q4 accordingly.
-              </p>
-            </div>
-            <div className="p-3 border border-emerald-100 bg-emerald-50/50 rounded-md">
-              <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
-                <TrendingDown className="w-3.5 h-3.5" /> Stationery down
-              </div>
-              <p className="text-xs text-slate-700 mt-1.5">
-                Stationery ordering down <b>32%</b> YoY — hybrid work reducing office consumption.
-              </p>
-            </div>
-          </div>
-        </div>
+        <AnomaliesTab requests={requests} />
       </div>
     </DashboardLayout>
   );

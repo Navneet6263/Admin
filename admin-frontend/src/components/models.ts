@@ -2,13 +2,15 @@ export type RequestType = 'id_card' | 'visiting_card' | 'stationery' | 'travel' 
 export type RequestStatus = 'pending' | 'queued' | 'awaiting_verification' | 'approved' | 'rejected' | 'info_requested';
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 
-export interface AuditEntry { at: string; actor: string; action: 'created' | 'approved' | 'rejected' | 'queued' | 'info_requested' | 'commented' | 'verified' | 'sent_back'; note?: string; }
+export interface AuditEntry { at: string; actor: string; action: 'created' | 'raised' | 'withdrawn' | 'approved' | 'rejected' | 'queued' | 'info_requested' | 'commented' | 'verified' | 'sent_back' | 'payment_updated' | 'payment_verified'; note?: string; }
 export interface StationeryPick { sku: string; name: string; qty: number; price: number; }
 export interface RequestItem {
   id: string; dbId?: number; employeeId: number; employeeName: string; employeeDept: string;
   company: string; team: string; type: RequestType; subject: string; amount: number | null;
   description: string; priority: Priority; status: RequestStatus; createdAt: string; updatedAt: string;
   audit: AuditEntry[]; items?: StationeryPick[]; details?: Record<string, unknown>;
+  homeCenter?: string; requestCenter?: string; approvalCenter?: string; chargeCenter?: string;
+  inventoryCenter?: string; workflowStatus?: string; paymentStatus?: string; canAct?: boolean;
 }
 
 export const typeLabels: Record<RequestType, string> = {

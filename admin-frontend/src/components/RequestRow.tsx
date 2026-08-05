@@ -1,7 +1,6 @@
 import type { RequestItem } from "./models";
 import { typeLabels } from "./models";
 import { typeIcon, priorityTone, statusTone, relTime, fmtINR } from "./requestMeta";
-import { companyByCode } from "./company";
 
 interface Props {
   request: RequestItem;
@@ -15,7 +14,6 @@ export function RequestRow({ request, selected, checked, onToggleCheck, onSelect
   const Icon = typeIcon[request.type];
   const pri = priorityTone[request.priority];
   const st = statusTone[request.status];
-  const comp = companyByCode(request.company);
 
   return (
     <div
@@ -40,9 +38,9 @@ export function RequestRow({ request, selected, checked, onToggleCheck, onSelect
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="font-mono text-[10px] text-slate-400 tabular-nums shrink-0">{request.id}</span>
-            <span className={`shrink-0 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider rounded border ${comp.tone}`}>
-              {comp.code}
-            </span>
+            {request.company && <span className="shrink-0 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider rounded border border-slate-200 bg-slate-50 text-slate-700">
+              {request.company}
+            </span>}
             <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${pri.text} shrink-0`}>
               <span className={`w-1.5 h-1.5 rounded-full ${pri.dot}`} /> {pri.label}
             </span>

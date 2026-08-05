@@ -9,18 +9,14 @@ export function TeamTab() {
   const [loading, setLoading] = useState(true);
 
   // Dynamic Company & Team Creation state
-  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string; legal_name: string }>>([
-    { id: 1, code: 'VI', name: 'Vision India', legal_name: 'Vision India Pvt. Ltd.' },
-    { id: 2, code: 'JJ', name: 'Just Job', legal_name: 'Just Job Services Pvt. Ltd.' },
-    { id: 3, code: 'LS', name: 'Live Skills', legal_name: 'Live Skills Education Pvt. Ltd.' },
-  ]);
+  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string; legal_name: string }>>([]);
   const [newCompName, setNewCompName] = useState('');
   const [creatingComp, setCreatingComp] = useState(false);
   const [compSuccess, setCompSuccess] = useState('');
   const [compError, setCompError] = useState('');
 
   const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamCompany, setNewTeamCompany] = useState('Vision India');
+  const [newTeamCompany, setNewTeamCompany] = useState('');
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
   const [teamSuccess, setTeamSuccess] = useState('');
@@ -35,7 +31,10 @@ export function TeamTab() {
       ]);
       setUsers(uData);
       setTeams(tData);
-      if (Array.isArray(cData) && cData.length > 0) setCompaniesList(cData);
+      if (Array.isArray(cData) && cData.length > 0) {
+        setCompaniesList(cData);
+        setNewTeamCompany((prev) => prev || cData[0].name);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -86,8 +85,11 @@ export function TeamTab() {
 
   const roleBadges: Record<string, string> = {
     super_admin: 'bg-purple-100 text-purple-800 border-purple-200',
+    hq_admin: 'bg-slate-100 text-slate-800 border-slate-200',
     admin: 'bg-slate-100 text-slate-800 border-slate-200',
+    center_admin: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     finance: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    finance_head: 'bg-teal-100 text-teal-800 border-teal-200',
     verifier: 'bg-violet-100 text-violet-800 border-violet-200',
     employee: 'bg-sky-100 text-sky-800 border-sky-200',
   };

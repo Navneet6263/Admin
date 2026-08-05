@@ -1,8 +1,16 @@
-import type { RequestItem } from '@/components/models';
+import type { AuditEntry, RequestItem } from '@/components/models';
 
 const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 const tokenKey = 'requesthub.token';
-export type SessionUser = { id: number; email: string; name: string; role: string; company: string; dept: string };
+export type SessionUser = {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  company: string;
+  dept: string;
+  center_code?: string | null;
+};
 
 const userKey = 'requesthub.user';
 
@@ -36,7 +44,8 @@ export const session = {
       localStorage.setItem(userKey, JSON.stringify(u));
       return u;
     } catch {
-      return this.user;
+      this.clear();
+      return null;
     }
   }
 };
@@ -52,18 +61,8 @@ export async function request<T>(path: string, init: { method?: string; body?: u
 }
 
 export function toRequest(row: Record<string, unknown>): RequestItem {
-  let audit: { at: string; actor: string; action: string; note?: string }[] =
+  const audit: AuditEntry[] =
     typeof row.audit === 'string' ? JSON.parse(row.audit) : (Array.isArray(row.audit) ? row.audit : []);
-
-  if (!audit || audit.length === 0) {
-    const actorName = String(row.employeeName || row.employee_name || 'Requester');
-    const createdAt = String(row.created_at || new Date().toISOString());
-    const updatedAt = String(row.updated_at || createdAt);
-    audit = [{ at: createdAt, actor: actorName, action: 'raised', note: 'Request raised' }];
-    if (row.status === 'rejected') {
-      audit.push({ at: updatedAt, actor: actorName, action: 'withdrawn', note: 'Withdrawn by requester' });
-    }
-  }
 
   return {
     id: String(row.ref_id || row.id),
@@ -83,7 +82,16 @@ export function toRequest(row: Record<string, unknown>): RequestItem {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     audit,
+    homeCenter: String(row.home_center_code || ''), requestCenter: String(row.request_center_code || ''),
+    approvalCenter: String(row.approval_center_code || ''), chargeCenter: String(row.charge_center_code || ''),
+    inventoryCenter: String(row.inventory_center_code || ''), workflowStatus: String(row.workflow_status || ''),
+    paymentStatus: String(row.payment_status || ''), canAct: Boolean(row.can_act),
   };
 }
 
 export const getRequests = async (path: string) => (await request<Record<string, unknown>[]>(path)).map(toRequest);
+export interface Paged<T> { data: T[]; page: number; page_size: number; total: number; }
+export const getPagedRequests = async (path: string) => {
+  const page = await request<Paged<Record<string, unknown>>>(path);
+  return { ...page, data: page.data.map(toRequest) };
+};

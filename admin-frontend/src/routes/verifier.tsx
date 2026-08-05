@@ -4,8 +4,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { RequestRow } from "@/components/RequestRow";
 import { RequestDetail } from "@/components/RequestDetail";
 import { priorityRank, typeLabels, type RequestItem, type RequestStatus, type RequestType, type Priority } from "@/components/models";
-import { getRequests, request } from "@/lib/api";
-import { companies } from "@/components/company";
+import { getRequests, request, session } from "@/lib/api";
+import { useCompanies } from "@/lib/directory";
 import { ShieldCheck, Inbox, CheckCircle2, Undo2, Filter, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/verifier")({
@@ -20,17 +20,18 @@ export const Route = createFileRoute("/verifier")({
 
 type Tab = "queue" | "verified" | "sent_back" | "all";
 type SortKey = "priority" | "newest" | "oldest" | "amount";
-const CURRENT = { id: "VER-007", name: "Sneha Iyer", role: "Claim Verifier" };
-const tag = () => `${CURRENT.name} (${CURRENT.id})`;
-
-const autoNote = (action: "verify" | "send_back", userNote: string) => {
+const autoNote = (actor: string, action: "verify" | "send_back", userNote: string) => {
   const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   const verb = action === "verify" ? "Verified & closed" : "Sent back to Admin";
-  const head = `${verb} by ${tag()} · ${ts} IST`;
+  const head = `${verb} by ${actor} · ${ts} IST`;
   return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
 };
 
 function VerifierConsole() {
+  const [sessionUser, setSessionUser] = useState(session.user);
+  const companies = useCompanies();
+  useEffect(() => { void session.me().then(setSessionUser); }, []);
+  const actor = sessionUser ? `${sessionUser.name} (USR-${sessionUser.id})` : "Authenticated verifier";
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [tab, setTab] = useState<Tab>("queue");
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -81,12 +82,12 @@ function VerifierConsole() {
       const nextStatus: RequestStatus = action === "verify" ? "approved" : "pending";
       return {
         ...r, status: nextStatus, updatedAt: at,
-        audit: [...r.audit, { at, actor: tag(), action: action === "verify" ? "verified" : "sent_back", note: autoNote(action, note) }],
+        audit: [...r.audit, { at, actor, action: action === "verify" ? "verified" : "sent_back", note: autoNote(actor, action, note) }],
       };
     }));
     const target = requests.find(r => r.id === id);
     if (target?.dbId) { await request(`/api/verifier/requests/${target.dbId}/${action === 'verify' ? 'verify' : 'send-back'}`, { method: 'POST', body: { note } }); await refresh(); }
-  }, [refresh, requests]);
+  }, [actor, refresh, requests]);
 
   const tabs: { id: Tab; label: string; icon: typeof Inbox; count: number }[] = [
     { id: "queue", label: "Awaiting verification", icon: Inbox, count: counts.queue },
@@ -96,7 +97,7 @@ function VerifierConsole() {
   ];
 
   return (
-    <DashboardLayout workspace="Verifier Desk" currentUser={`${CURRENT.name} · ${CURRENT.id}`} role={CURRENT.role}>
+    <DashboardLayout workspace="Verifier Desk" currentUser={sessionUser?.name ?? ""} role={sessionUser?.dept || "Verifier"}>
       <div className="px-4 sm:px-6 pt-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
@@ -104,8 +105,8 @@ function VerifierConsole() {
             <h1 className="font-display text-2xl font-semibold text-slate-900">Verification Queue</h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded border border-violet-100 bg-violet-50 text-violet-700">
-                <ShieldCheck className="w-3 h-3" /> Signed in as {CURRENT.name}
-                <span className="font-mono text-violet-600/80">· {CURRENT.id}</span>
+                <ShieldCheck className="w-3 h-3" /> Signed in as {sessionUser?.name ?? "Loading…"}
+                {sessionUser && <span className="font-mono text-violet-600/80">· USR-{sessionUser.id}</span>}
               </span>
               <span className="text-[11px] text-slate-500">Every verification is signed and locked to the audit trail.</span>
             </div>

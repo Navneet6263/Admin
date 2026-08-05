@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Building2, AlertTriangle, Plus, Edit2, Copy, Check, Sparkles } from "lucide-react";
 import { request } from "@/lib/api";
 import { type UserRow, type CenterRow } from "./shared";
+import { CenterCombobox } from "@/components/CenterCombobox";
+import { useCompanies } from "@/lib/directory";
 
 interface CentersAssignmentPanelProps {
   users: UserRow[];
@@ -14,6 +16,7 @@ interface CentersAssignmentPanelProps {
 }
 
 export function CentersAssignmentPanel({ users, centers, assigningId, search, onSearch, onAssign, onLoad }: CentersAssignmentPanelProps) {
+  const companies = useCompanies();
   useEffect(() => { onLoad(); }, [onLoad]);
 
   // Create Center Modal State
@@ -21,8 +24,8 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [newCity, setNewCity] = useState("");
-  const [newCompany, setNewCompany] = useState("VT");
-  const [newBudget, setNewBudget] = useState("200000");
+  const [newCompany, setNewCompany] = useState("Vision India");
+  const [newBudget, setNewBudget] = useState("0");
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState("");
   const [createErr, setCreateErr] = useState("");
@@ -61,7 +64,7 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
         body: {
           code: newCode.trim() || undefined,
           name: newName.trim(),
-          city: newCity.trim() || 'Noida',
+          city: newCity.trim(),
           company: newCompany,
           initial_budget: newBudget,
         },
@@ -102,11 +105,11 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
     if (!joinUserId || !joinCodeInput) return;
     setJoining(true); setJoinResMsg("");
     try {
-      const res = await request<{ message: string }>('/api/centers/join-by-code', {
+      const res = await request<{ success: boolean }>(`/api/super-admin/users/${joinUserId}/assign-center`, {
         method: 'POST',
-        body: { user_id: parseInt(joinUserId), center_code: joinCodeInput },
+        body: { center_code: joinCodeInput },
       });
-      setJoinResMsg(res.message);
+      setJoinResMsg(res.success ? 'Successfully linked center' : 'Center assignment failed');
       onLoad();
     } catch (err) {
       setJoinResMsg(err instanceof Error ? err.message : "Failed to join center");
@@ -292,17 +295,9 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
                   )}
                 </td>
                 <td className="px-5 py-3.5">
-                  <select
-                    value={u.center_code ?? ""}
-                    disabled={assigningId === u.id}
-                    onChange={e => { if (e.target.value) onAssign(u.id, e.target.value); }}
-                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50 cursor-pointer"
-                  >
-                    <option value="">— Select Center —</option>
-                    {centers.filter(c => c.is_active !== false).map(c => (
-                      <option key={c.code} value={c.code}>{c.code} — {c.name} ({c.city})</option>
-                    ))}
-                  </select>
+                  <CenterCombobox centers={centers.filter(c => c.is_active !== false)} value={u.center_code ?? ""}
+                    onChange={(code) => onAssign(u.id, code)} disabled={assigningId === u.id}
+                    placeholder="Search center…" className="w-64" />
                   {assigningId === u.id && <span className="ml-2 text-xs text-indigo-500 animate-pulse">Saving…</span>}
                 </td>
               </tr>
@@ -368,6 +363,14 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Company *</label>
+                <select value={newCompany} onChange={e => setNewCompany(e.target.value)} required
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                  {companies.map(company => <option key={company.id} value={company.name}>{company.name}</option>)}
+                </select>
               </div>
 
               {createErr && <div className="text-xs text-rose-600 bg-rose-50 border border-rose-100 p-2.5 rounded-lg">{createErr}</div>}
