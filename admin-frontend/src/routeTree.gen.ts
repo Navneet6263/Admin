@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as CenterAdminRouteImport } from './routes/center-admin'
+import { Route as CommandCenterRouteImport } from './routes/command-center'
 import { Route as EmployeeRouteImport } from './routes/employee'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as InsightsRouteImport } from './routes/insights'
@@ -26,6 +28,16 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CenterAdminRoute = CenterAdminRouteImport.update({
+  id: '/center-admin',
+  path: '/center-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommandCenterRoute = CommandCenterRouteImport.update({
+  id: '/command-center',
+  path: '/command-center',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmployeeRoute = EmployeeRouteImport.update({
@@ -62,6 +74,8 @@ const ApiPublicRequestsRoute = ApiPublicRequestsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/center-admin': typeof CenterAdminRoute
+  '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
   '/insights': typeof InsightsRoute
@@ -72,6 +86,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/center-admin': typeof CenterAdminRoute
+  '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
   '/insights': typeof InsightsRoute
@@ -83,6 +99,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/center-admin': typeof CenterAdminRoute
+  '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
   '/insights': typeof InsightsRoute
@@ -95,6 +113,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/center-admin'
+    | '/command-center'
     | '/employee'
     | '/finance'
     | '/insights'
@@ -105,6 +125,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/center-admin'
+    | '/command-center'
     | '/employee'
     | '/finance'
     | '/insights'
@@ -115,6 +137,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/center-admin'
+    | '/command-center'
     | '/employee'
     | '/finance'
     | '/insights'
@@ -126,6 +150,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  CenterAdminRoute: typeof CenterAdminRoute
+  CommandCenterRoute: typeof CommandCenterRoute
   EmployeeRoute: typeof EmployeeRoute
   FinanceRoute: typeof FinanceRoute
   InsightsRoute: typeof InsightsRoute
@@ -148,6 +174,20 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/center-admin': {
+      id: '/center-admin'
+      path: '/center-admin'
+      fullPath: '/center-admin'
+      preLoaderRoute: typeof CenterAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/command-center': {
+      id: '/command-center'
+      path: '/command-center'
+      fullPath: '/command-center'
+      preLoaderRoute: typeof CommandCenterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/employee': {
@@ -198,6 +238,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  CenterAdminRoute: CenterAdminRoute,
+  CommandCenterRoute: CommandCenterRoute,
   EmployeeRoute: EmployeeRoute,
   FinanceRoute: FinanceRoute,
   InsightsRoute: InsightsRoute,

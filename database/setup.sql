@@ -16,13 +16,30 @@ DROP TABLE IF EXISTS approvals;
 DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS companies;
+GO
+
+-- COMPANIES TABLE (Dynamic Companies / Brands)
+CREATE TABLE companies (
+  id         INT PRIMARY KEY IDENTITY(1,1),
+  code       VARCHAR(10) NOT NULL UNIQUE,
+  name       NVARCHAR(100) NOT NULL,
+  legal_name NVARCHAR(150) NOT NULL,
+  created_at DATETIME DEFAULT GETDATE()
+);
+GO
+
+INSERT INTO companies (code, name, legal_name) VALUES
+('VI', N'Vision India', N'Vision India Pvt. Ltd.'),
+('JJ', N'Just Job', N'Just Job Services Pvt. Ltd.'),
+('LS', N'Live Skills', N'Live Skills Education Pvt. Ltd.');
 GO
 
 -- TEAMS TABLE (Dynamic Teams / Departments)
 CREATE TABLE teams (
   id         INT PRIMARY KEY IDENTITY(1,1),
   name       NVARCHAR(80) NOT NULL UNIQUE,
-  company    NVARCHAR(8)  NOT NULL DEFAULT 'VT',
+  company    NVARCHAR(80) NOT NULL DEFAULT 'Vision India',
   created_at DATETIME DEFAULT GETDATE()
 );
 GO

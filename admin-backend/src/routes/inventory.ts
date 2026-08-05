@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import mssql from 'mssql';
 import { pool } from '../db';
+import { requireAuth } from '../auth';
 
 const router = Router();
 const categories = new Set(['Writing', 'Paper', 'Printing', 'Filing', 'Desk', 'Misc']);
@@ -17,7 +18,7 @@ router.get('/movements', async (req, res) => {
   catch (error) { console.error(error); res.status(500).json({ error: 'Movement query failed' }); }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth('admin', 'super_admin'), async (req, res) => {
   const { sku, name, category, unit, price, qty, threshold = 10 } = req.body ?? {};
   if (![sku, name, category, unit].every(v => typeof v === 'string') || !categories.has(category) || !Number.isFinite(price) || !Number.isInteger(qty) || qty < 0) return res.status(400).json({ error: 'Invalid inventory item' });
   const tx = pool.transaction();
@@ -29,7 +30,7 @@ router.post('/', async (req, res) => {
   } catch (error) { await tx.rollback(); console.error(error); res.status(500).json({ error: 'Inventory creation failed' }); }
 });
 
-router.patch('/:sku', async (req, res) => {
+router.patch('/:sku', requireAuth('admin', 'super_admin'), async (req, res) => {
   const { qty, note = 'Manual stock edit' } = req.body ?? {};
   if (!Number.isInteger(qty) || qty < 0) return res.status(400).json({ error: 'qty must be a non-negative integer' });
   const tx = pool.transaction();

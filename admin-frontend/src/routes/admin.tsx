@@ -22,20 +22,31 @@ export const Route = createFileRoute("/admin")({
 
 type Tab = "inbox" | "queued" | "approved" | "rejected" | "all";
 type SortKey = "priority" | "newest" | "oldest" | "amount";
-const CURRENT_ADMIN = { id: "ADM-001", name: "John Admin", role: "Admin" };
-const actorTag = () => `${CURRENT_ADMIN.name} (${CURRENT_ADMIN.id})`;
-
-const autoNote = (action: "approve" | "reject" | "queue" | "info", userNote: string) => {
-  const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  const verb =
-    action === "approve" ? "Approved · sent to Verifier" :
-    action === "reject" ? "Rejected" :
-    action === "queue" ? "Queued for Super Admin" : "Info requested";
-  const head = `${verb} by ${actorTag()} · ${ts} IST`;
-  return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
-};
-
 function AdminConsole() {
+  const [sessionUser, setSessionUser] = useState(session.user);
+  useEffect(() => {
+    void session.me().then((u) => { if (u) setSessionUser(u); });
+  }, []);
+
+  const currentAdmin = useMemo(() => {
+    return {
+      id: sessionUser?.id ? `ADM-${String(sessionUser.id).padStart(3, "0")}` : "ADM-001",
+      name: sessionUser?.name || "Admin User",
+      role: sessionUser?.dept ? `${sessionUser.dept} · Admin` : "Administrator",
+    };
+  }, [sessionUser]);
+
+  const actorTag = useCallback(() => `${currentAdmin.name} (${currentAdmin.id})`, [currentAdmin]);
+
+  const autoNote = useCallback((action: "approve" | "reject" | "queue" | "info", userNote: string) => {
+    const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    const verb =
+      action === "approve" ? "Approved · sent to Verifier" :
+      action === "reject" ? "Rejected" :
+      action === "queue" ? "Queued for Super Admin" : "Info requested";
+    const head = `${verb} by ${actorTag()} · ${ts} IST`;
+    return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
+  }, [actorTag]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [view, setView] = useState<"requests" | "inventory">("requests");
   const [tab, setTab] = useState<Tab>("inbox");
@@ -152,7 +163,7 @@ function AdminConsole() {
   ];
 
   return (
-    <DashboardLayout workspace="Admin Console" role="Administrator" currentUser={`${CURRENT_ADMIN.name} · ${CURRENT_ADMIN.id}`}>
+    <DashboardLayout workspace="Admin Console" role={currentAdmin.role} currentUser={`${currentAdmin.name} · ${currentAdmin.id}`} searchQuery={query} onSearchChange={setQuery}>
       <div className="px-4 sm:px-6 pt-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
@@ -160,8 +171,8 @@ function AdminConsole() {
             <h1 className="font-display text-2xl font-semibold text-slate-900">{view === "requests" ? "Approval Queue" : "Stationery Inventory"}</h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded border border-emerald-100 bg-emerald-50 text-emerald-700">
-                <ShieldCheck className="w-3 h-3" /> Signed in as {CURRENT_ADMIN.name}
-                <span className="font-mono text-emerald-600/80">· {CURRENT_ADMIN.id}</span>
+                <ShieldCheck className="w-3 h-3" /> Signed in as {currentAdmin.name}
+                <span className="font-mono text-emerald-600/80">· {currentAdmin.id}</span>
               </span>
               <span className="text-[11px] text-slate-500">Every action is signed and logged.</span>
             </div>

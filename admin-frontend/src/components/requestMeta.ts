@@ -30,8 +30,23 @@ export const statusTone: Record<RequestStatus, { text: string; bg: string; label
   info_requested:        { text: "text-slate-700",   bg: "bg-slate-100 border-slate-200",    label: "Info Requested" },
 };
 
+function parseLocalDate(iso: string): Date {
+  if (!iso) return new Date();
+  if (typeof iso === "string" && iso.endsWith("Z")) {
+    // SQL Server GETDATE() timestamps get serialized with a trailing 'Z' by mssql driver.
+    // Stripping 'Z' prevents double-applying IST timezone offset (+5:30).
+    const localStr = iso.slice(0, -1);
+    const d = new Date(localStr);
+    if (!isNaN(d.getTime())) return d;
+  }
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
 export function relTime(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
+  const date = parseLocalDate(iso);
+  const diff = Date.now() - date.getTime();
+  if (diff < 0) return "Just now";
   const h = Math.floor(diff / 3_600_000);
   if (h < 1) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`;
   if (h < 24) return `${h}h ago`;
@@ -40,8 +55,9 @@ export function relTime(iso: string) {
 }
 
 export function fmtDateTime(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  const date = parseLocalDate(iso);
+  return date.toLocaleString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true,
   });
 }
 

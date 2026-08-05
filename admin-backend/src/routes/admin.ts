@@ -7,28 +7,24 @@ const router = Router();
 // ── GET /api/admin/requests?status=pending ───────────────────────────────────
 router.get('/requests', async (req: Request, res: Response) => {
   const status = (req.query.status as string) || 'pending';
-  const cacheKey = `admin:requests:${status}`;
-  const cached = getCached<unknown[]>(cacheKey);
-  if (cached) return res.json(cached);
 
   try {
     const result = await pool.request()
-      .input('status', mssql.NVarChar, status)
+      .input('status', mssql.NVarChar(30), status)
       .query(`
         SELECT TOP 200
           r.id, r.ref_id, r.user_id, r.company, r.team,
           r.type, r.subject, r.description, r.amount,
           r.priority, r.status, r.details,
           r.created_at, r.updated_at,
-          u.name AS employeeName, u.email, u.dept AS employeeDept
+          u.name AS employeeName, u.email, ISNULL(u.dept, r.team) AS employeeDept
         FROM requests r
-        JOIN users u ON r.user_id = u.id
-        WHERE r.status = @status
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE (@status = 'all' OR r.status = @status)
         ORDER BY
           CASE r.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
           r.created_at DESC
       `);
-    setCache(cacheKey, result.recordset);
     res.json(result.recordset);
   } catch (err) {
     console.error(err);

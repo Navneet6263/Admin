@@ -7,7 +7,7 @@ import { NewRequestDialog } from "@/components/NewRequestDialog";
 import { priorityRank, typeLabels, type Priority, type RequestItem, type RequestStatus, type RequestType } from "@/components/models";
 import { typeIcon } from "@/components/requestMeta";
 import { getRequests, request, session } from "@/lib/api";
-import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles, AlertTriangle, X } from "lucide-react";
 
 export const Route = createFileRoute("/employee")({
   head: () => ({
@@ -20,7 +20,6 @@ export const Route = createFileRoute("/employee")({
 });
 
 type Tab = "active" | "approved" | "rejected" | "all";
-const ME = { id: 1, name: "Rahul Kumar", dept: "Engineering", company: "VT" };
 
 function EmployeeConsole() {
   const [requests, setRequests] = useState<RequestItem[]>([]);
@@ -28,13 +27,27 @@ function EmployeeConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [prefillType, setPrefillType] = useState<RequestType | null>(null);
-  const [userId, setUserId] = useState(ME.id);
+  const [confirmWithdraw, setConfirmWithdraw] = useState<RequestItem | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string; dept: string; company: string }>({
+    id: 0, name: "Employee", email: "", dept: "Operations", company: "Vision India"
+  });
+
   const refresh = useCallback(async () => {
-    try { const me = await request<{ id: number }>('/api/auth/me'); setUserId(me.id); setRequests(await getRequests(`/api/employee/requests/${me.id}`)); } catch (error) { console.error(error); }
+    try {
+      const me = await request<{ id: number; name: string; email: string; dept: string; company: string }>('/api/auth/me');
+      setCurrentUser(me);
+      setRequests(await getRequests(`/api/employee/requests/${me.id}`));
+    } catch (error) { console.error(error); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const mine = useMemo(() => requests.filter((r) => r.employeeId === userId), [requests, userId]);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const mine = useMemo(() => {
+    if (!currentUser.id) return requests;
+    return requests.filter((r) => !r.employeeId || r.employeeId === currentUser.id);
+  }, [requests, currentUser.id]);
 
   const counts = useMemo(() => ({
     active: mine.filter((r) => r.status === "pending" || r.status === "queued" || r.status === "info_requested" || r.status === "awaiting_verification").length,
@@ -44,13 +57,23 @@ function EmployeeConsole() {
   }), [mine]);
 
   const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     const byTab = (r: RequestItem) =>
       tab === "all" ? true :
       tab === "active" ? (r.status === "pending" || r.status === "queued" || r.status === "info_requested" || r.status === "awaiting_verification") :
       r.status === (tab as RequestStatus);
-    return mine.filter(byTab)
+    const bySearch = (r: RequestItem) =>
+      !q ||
+      r.id.toLowerCase().includes(q) ||
+      r.subject.toLowerCase().includes(q) ||
+      r.description.toLowerCase().includes(q) ||
+      typeLabels[r.type].toLowerCase().includes(q) ||
+      r.employeeName.toLowerCase().includes(q) ||
+      r.company.toLowerCase().includes(q);
+
+    return mine.filter((r) => byTab(r) && bySearch(r))
       .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || +new Date(b.updatedAt) - +new Date(a.updatedAt));
-  }, [mine, tab]);
+  }, [mine, tab, searchQuery]);
 
   const selected = filtered.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
 
@@ -59,21 +82,32 @@ function EmployeeConsole() {
     items?: import("@/components/models").StationeryPick[];
     details?: Record<string, unknown>;
   }) => {
-    await request('/api/employee/requests', { method: 'POST', body: { user_id: userId, ...draft, details: { ...draft.details, items: draft.items } } });
-    await refresh(); setTab("active"); setDialogOpen(false); setPrefillType(null);
-  }, [refresh, userId]);
+    const created = await request<{ id: number; ref_id: string }>('/api/employee/requests', {
+      method: 'POST',
+      body: { user_id: currentUser.id, ...draft, details: { ...draft.details, items: draft.items } }
+    });
+    await refresh();
+    setTab("active");
+    if (created?.ref_id) setSelectedId(created.ref_id);
+    setSuccessToast(`Request ${created?.ref_id || 'submitted'} created successfully! Sent to Center Admin for approval.`);
+    setTimeout(() => setSuccessToast(null), 6000);
+    setDialogOpen(false);
+    setPrefillType(null);
+  }, [refresh, currentUser.id]);
 
-  const cancelRequest = useCallback((id: string, note: string) => {
-    // employee's "info" action = withdraw / add clarification; here we mark rejected by requester
-    setRequests((prev) => prev.map((r) => {
-      if (r.id !== id) return r;
-      const at = new Date().toISOString();
-      return {
-        ...r, status: "rejected", updatedAt: at,
-        audit: [...r.audit, { at, actor: ME.name, action: "rejected", note: note || "Withdrawn by requester" }],
-      };
-    }));
-  }, []);
+  const cancelRequest = useCallback(async (reqItem: RequestItem) => {
+    try {
+      await request(`/api/employee/requests/${reqItem.dbId}/cancel`, {
+        method: 'PATCH',
+        body: { user_id: currentUser.id, note: 'Withdrawn by requester' }
+      });
+      await refresh();
+      setSuccessToast(`Request ${reqItem.id} has been withdrawn.`);
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [refresh, currentUser.id]);
 
   const kpis = [
     { label: "In progress", value: counts.active, icon: Inbox, tone: "amber" as const },
@@ -92,12 +126,12 @@ function EmployeeConsole() {
   ];
 
   return (
-    <DashboardLayout workspace="Employee Portal" currentUser={ME.name} role={`${ME.dept} · Employee`}>
+    <DashboardLayout workspace="Employee Portal" currentUser={currentUser.name} role={`${currentUser.dept || 'Operations'} · Employee`} searchQuery={searchQuery} onSearchChange={setSearchQuery}>
       <div className="px-4 sm:px-6 pt-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">Employee · My Workspace</p>
-            <h1 className="font-display text-2xl font-semibold text-slate-900">Namaste, {ME.name.split(" ")[0]}.</h1>
+            <h1 className="font-display text-2xl font-semibold text-slate-900">Namaste, {currentUser.name.split(" ")[0]}.</h1>
             <p className="text-sm text-slate-500 mt-1">Raise a new request, or track what's already in flight.</p>
           </div>
           <button onClick={() => { setPrefillType(null); setDialogOpen(true); }}
@@ -106,6 +140,22 @@ function EmployeeConsole() {
           </button>
         </div>
 
+        {/* Success confirmation toast */}
+        {successToast && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top duration-300">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-xs font-bold">{successToast}</p>
+                <p className="text-[11px] text-emerald-700 mt-0.5">Your request status has been updated in your portal.</p>
+              </div>
+            </div>
+            <button onClick={() => setSuccessToast(null)} className="text-emerald-700 hover:text-emerald-900 text-xs font-bold px-2 py-1">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* KPI strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
           {kpis.map((k) => <KpiTile key={k.label} {...k} />)}
@@ -113,78 +163,130 @@ function EmployeeConsole() {
 
         {/* Quick launchers */}
         <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-slate-400" />
-            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-medium">Quick raise</p>
-          </div>
-          <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Quick raise</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
             {quickTypes.map((t) => {
               const Icon = typeIcon[t];
               return (
                 <button key={t} onClick={() => { setPrefillType(t); setDialogOpen(true); }}
-                  className="flex flex-col items-center gap-1.5 p-3 bg-white border border-slate-200 rounded-lg text-[10px] text-slate-600 hover:border-slate-900 hover:text-slate-900 hover:shadow-sm transition-all">
-                  <Icon className="w-4 h-4" strokeWidth={1.75} />
-                  <span className="leading-tight text-center">{typeLabels[t]}</span>
+                  className="flex items-center gap-2 p-2.5 bg-white border border-slate-200/80 rounded-lg hover:border-slate-400 hover:shadow-sm text-left transition-all group">
+                  <div className="w-7 h-7 rounded grid place-items-center bg-slate-100 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
+                    <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  </div>
+                  <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900 truncate">
+                    {typeLabels[t].split(" ")[0]}
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-slate-200 -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-200 mb-4">
           {tabs.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                tab === t.id ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"
+              className={`pb-2 px-1 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                tab === t.id ? "border-slate-900 text-slate-900 font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"
               }`}>
-              {t.label}
-              <span className={`px-1.5 py-0.5 rounded text-[10px] tabular-nums ${tab === t.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500"}`}>{t.count}</span>
+              <span>{t.label}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                tab === t.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+              }`}>{t.count}</span>
             </button>
           ))}
         </div>
-      </div>
 
-      <div className="mx-4 sm:mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-4 h-[calc(100vh-22rem)] min-h-[520px]">
-        <div className="bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">My submissions</p>
-            <span className="text-[11px] text-slate-400 tabular-nums">{filtered.length} total</span>
-          </div>
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-            {filtered.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-400">
-                <p>No requests here.</p>
-                <button onClick={() => setDialogOpen(true)} className="mt-3 text-xs text-slate-900 font-semibold underline underline-offset-2">Raise your first request →</button>
-              </div>
-            ) : filtered.map((r) => (
-              <RequestRow key={r.id} request={r} selected={selected?.id === r.id}
-                checked={false} onToggleCheck={() => {}} onSelect={setSelectedId} />
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
-          {selected ? (
-            <>
-              <div className="flex-1 min-h-0"><RequestDetail request={selected} readOnly /></div>
-              {selected.status === "pending" && (
-                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <p className="text-[11px] text-slate-500">You can withdraw while it's still pending.</p>
-                  <button onClick={() => cancelRequest(selected.id, "Withdrawn by requester")}
-                    className="px-3 py-1.5 text-[11px] font-semibold text-rose-700 border border-rose-200 rounded hover:bg-rose-50">
-                    Withdraw request
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="h-full grid place-items-center text-sm text-slate-400 p-8 text-center">
-              Nothing selected. Raise a new request to get started.
+        {/* Main Master-Detail view */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
+          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+            <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500 font-medium">
+              <span>{filtered.length} requests</span>
+              <span>Sorted by priority & date</span>
             </div>
-          )}
+            <div className="divide-y divide-slate-100 overflow-y-auto max-h-[560px]">
+              {filtered.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No requests found in this view.
+                </div>
+              ) : filtered.map((r) => (
+                <RequestRow key={r.id} request={r} selected={selected?.id === r.id}
+                  checked={false} onToggleCheck={() => {}} onSelect={setSelectedId} />
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
+            {selected ? (
+              <>
+                <div className="flex-1 min-h-0"><RequestDetail request={selected} readOnly /></div>
+                {(selected.status === "pending" || selected.status === "queued" || selected.status === "info_requested") && (
+                  <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <p className="text-[11px] text-slate-500 font-medium">You can withdraw this request while it is in progress.</p>
+                    <button onClick={() => setConfirmWithdraw(selected)}
+                      className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 hover:border-rose-300 transition-all shadow-sm">
+                      Withdraw request
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="h-full grid place-items-center text-sm text-slate-400 p-8 text-center">
+                Nothing selected. Raise a new request to get started.
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Confirmation Modal for Request Withdrawal */}
+      {confirmWithdraw && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm grid place-items-center p-4 animate-in fade-in duration-200" onClick={() => setConfirmWithdraw(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-rose-600">
+                <div className="w-8 h-8 rounded-full bg-rose-100 grid place-items-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-slate-900">Withdraw Request?</h3>
+                  <p className="text-[10px] text-slate-400 font-mono">{confirmWithdraw.id}</p>
+                </div>
+              </div>
+              <button onClick={() => setConfirmWithdraw(null)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-1 text-xs">
+              <p className="font-bold text-slate-800">{confirmWithdraw.subject}</p>
+              <p className="text-[11px] text-slate-500 line-clamp-2">{confirmWithdraw.description}</p>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to withdraw this request? Once confirmed, this request will be marked as withdrawn and removed from active processing.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setConfirmWithdraw(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void cancelRequest(confirmWithdraw);
+                  setConfirmWithdraw(null);
+                }}
+                className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-lg shadow-rose-600/30 transition-all"
+              >
+                Yes, Withdraw Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NewRequestDialog open={dialogOpen} initialType={prefillType}
         onClose={() => { setDialogOpen(false); setPrefillType(null); }}

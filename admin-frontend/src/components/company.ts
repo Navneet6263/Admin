@@ -16,13 +16,12 @@ export const GROUP = {
 };
 
 export const companies: SubCompany[] = [
-  { code: "VT", name: "Vision Tech",      legal: "Vision Tech Pvt. Ltd.",      teams: ["Engineering", "Product", "Design", "HR"],           tone: "border-sky-200 bg-sky-50 text-sky-700" },
-  { code: "VR", name: "Vision Retail",    legal: "Vision Retail Pvt. Ltd.",    teams: ["Sales", "Merchandising", "Store Ops", "Marketing"], tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  { code: "VM", name: "Vision Media",     legal: "Vision Media Pvt. Ltd.",     teams: ["Design", "Marketing", "Content", "Production"],     tone: "border-amber-200 bg-amber-50 text-amber-700" },
-  { code: "VL", name: "Vision Logistics", legal: "Vision Logistics Pvt. Ltd.", teams: ["Operations", "Fleet", "Warehouse", "HR"],           tone: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  { code: "VI", name: "Vision India", legal: "Vision India Pvt. Ltd.", teams: ["Engineering", "HR", "Finance", "Operations", "Product"], tone: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  { code: "JJ", name: "Just Job",     legal: "Just Job Services Pvt. Ltd.", teams: ["Sales", "Recruitment", "Marketing", "Operations"], tone: "border-sky-200 bg-sky-50 text-sky-700" },
+  { code: "LS", name: "Live Skills",  legal: "Live Skills Education Pvt. Ltd.", teams: ["Training", "Product", "Design", "Academic Ops"], tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 ];
 
-export const companyByCode = (code: string) =>
-  companies.find((c) => c.code === code) ?? companies[0];
+export const companyByCode = (codeOrName: string) =>
+  companies.find((c) => c.code === codeOrName || c.name.toLowerCase() === (codeOrName || '').toLowerCase()) ?? companies[0];
 
 export const companyTone = (code: string) => companyByCode(code).tone;

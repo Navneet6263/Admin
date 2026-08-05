@@ -175,9 +175,11 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
 
 function describeAction(a: string) {
   switch (a) {
-    case "created": return "raised this request";
+    case "created":
+    case "raised": return "raised this request";
+    case "withdrawn": return "withdrew this request";
     case "approved": return "approved · sent to Verifier";
-    case "rejected": return "rejected the request";
+    case "rejected": return "rejected / withdrew the request";
     case "queued": return "queued for Super Admin review";
     case "info_requested": return "requested more information";
     case "commented": return "added a note";

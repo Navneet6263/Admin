@@ -36,7 +36,7 @@ router.post('/create', async (req: Request, res: Response) => {
   try {
     const result = await pool.request()
       .input('name', mssql.NVarChar(80), name.trim())
-      .input('company', mssql.NVarChar(8), company)
+      .input('company', mssql.NVarChar(100), company)
       .query(`
         INSERT INTO teams (name, company)
         OUTPUT inserted.id, inserted.name, inserted.company, inserted.created_at

@@ -1,5 +1,6 @@
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { LogOut, Search, Bell, Command } from "lucide-react";
+import { LogOut, Search, Bell, Command, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 export interface WorkspaceTab {
@@ -18,13 +19,31 @@ interface Props {
   activeTab?: string;
   onTabChange?: (key: string) => void;
   rightSlot?: ReactNode;             // per-workspace actions (e.g. "New request")
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  searchPlaceholder?: string;
 }
 
 export function DashboardLayout({
   children, currentUser, role = "Administrator",
   workspace, tabs = [], activeTab, onTabChange, rightSlot,
+  searchQuery = "", onSearchChange, searchPlaceholder = "Search requests, employees, IDs…",
 }: Props) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const initials = currentUser.split(" ").map((n) => n[0]).join("").slice(0, 2);
+
+  // Keyboard shortcut Ctrl+K / Cmd+K to focus search input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 flex flex-col">
       {/* Top bar: brand + search + user */}
@@ -43,10 +62,22 @@ export function DashboardLayout({
           <div className="relative w-full">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
-              placeholder="Search requests, employees, IDs…"
-              className="w-full pl-8 pr-14 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white"
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white transition-all"
             />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[9px] font-mono">⌘K</kbd>
+            {searchQuery ? (
+              <button
+                onClick={() => onSearchChange?.("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[9px] font-mono pointer-events-none">⌘K</kbd>
+            )}
           </div>
         </div>
 

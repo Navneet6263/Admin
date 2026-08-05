@@ -5,62 +5,105 @@ import { hashPassword, Role } from '../auth';
 
 const router = Router();
 
-// ── GET /api/super-admin/users ───────────────────────────────────────────────
+// ── GET /api/super-admin/users ────────────────────────────────
 router.get('/', async (_req: Request, res: Response) => {
   const cached = getCached<unknown[]>('sa:users');
   if (cached) return res.json(cached);
-
   try {
     const result = await pool.request().query(`
-      SELECT id, email, name, role, company, dept, is_active, created_at
-      FROM users
-      ORDER BY id DESC
+      SELECT u.id, u.email, u.name, u.role, u.company, u.dept,
+             u.is_active, u.created_at, u.center_code,
+             c.name AS center_name, c.city AS center_city
+      FROM users u
+      LEFT JOIN centers c ON c.code = u.center_code
+      ORDER BY u.id DESC
     `);
     setCache('sa:users', result.recordset);
     res.json(result.recordset);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Failed to fetch users' }); }
 });
 
-// ── POST /api/super-admin/users — Create Team Member / Role Account ──────────
+// ── POST /api/super-admin/users — Create User ─────────────────
 router.post('/', async (req: Request, res: Response) => {
-  const { email, name, role, company = 'VT', dept = '', password } = req.body;
-
-  if (!email?.trim() || !name?.trim() || !password?.trim()) {
+  const { email, name, role, company = 'VT', dept = '', password, center_code = '' } = req.body;
+  if (!email?.trim() || !name?.trim() || !password?.trim())
     return res.status(400).json({ error: 'Email, name, and password are required' });
-  }
 
   const validRoles: Role[] = ['employee', 'admin', 'finance', 'verifier', 'super_admin'];
-  if (!validRoles.includes(role)) {
-    return res.status(400).json({ error: 'Invalid user role' });
-  }
+  if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid user role' });
 
   try {
     const passwordHash = hashPassword(password.trim());
     const result = await pool.request()
-      .input('email', mssql.NVarChar(100), email.trim().toLowerCase())
-      .input('name', mssql.NVarChar(100), name.trim())
-      .input('role', mssql.NVarChar(20), role)
-      .input('company', mssql.NVarChar(8), company)
-      .input('dept', mssql.NVarChar(80), dept.trim())
-      .input('hash', mssql.NVarChar(256), passwordHash)
+      .input('email',   mssql.NVarChar(100), email.trim().toLowerCase())
+      .input('name',    mssql.NVarChar(100), name.trim())
+      .input('role',    mssql.NVarChar(20),  role)
+      .input('company', mssql.NVarChar(100), company)
+      .input('dept',    mssql.NVarChar(80),  dept.trim())
+      .input('cc',      mssql.NVarChar(10),  center_code || null)
+      .input('hash',    mssql.NVarChar(256), passwordHash)
       .query(`
-        INSERT INTO users (email, name, role, company, dept, password_hash, is_active)
-        OUTPUT inserted.id, inserted.email, inserted.name, inserted.role, inserted.company, inserted.dept, inserted.is_active, inserted.created_at
-        VALUES (@email, @name, @role, @company, @dept, @hash, 1)
+        INSERT INTO users (email, name, role, company, dept, center_code, password_hash, is_active)
+        OUTPUT inserted.id, inserted.email, inserted.name, inserted.role,
+               inserted.company, inserted.dept, inserted.center_code, inserted.is_active, inserted.created_at
+        VALUES (@email, @name, @role, @company, @dept, @cc, @hash, 1)
       `);
-
     clearCache('sa:users');
     res.status(201).json(result.recordset[0]);
   } catch (err: unknown) {
     console.error(err);
-    if (err instanceof Error && err.message.includes('UNIQUE')) {
+    if (err instanceof Error && err.message.includes('UNIQUE'))
       return res.status(409).json({ error: 'User with this email already exists' });
-    }
     res.status(500).json({ error: 'Failed to create user' });
   }
+});
+
+// ── POST /api/super-admin/users/:id/assign-center ────────────
+router.post('/:id/assign-center', async (req: Request, res: Response) => {
+  const { center_code } = req.body;
+  const userId = +req.params.id;
+  const actorId = (req.user as any)?.id ?? 1;
+  if (!center_code) return res.status(400).json({ error: 'center_code required' });
+
+  const tx = pool.transaction();
+  try {
+    await tx.begin();
+
+    // Update denormalized column on users
+    await tx.request()
+      .input('cc',  mssql.NVarChar(10), center_code)
+      .input('uid', mssql.Int, userId)
+      .query(`UPDATE users SET center_code = @cc WHERE id = @uid`);
+
+    // Upsert user_centers
+    await tx.request()
+      .input('uid',    mssql.Int, userId)
+      .input('cc',     mssql.NVarChar(10), center_code)
+      .input('actor',  mssql.Int, actorId)
+      .query(`
+        IF EXISTS (SELECT 1 FROM user_centers WHERE user_id = @uid)
+          UPDATE user_centers SET home_center_code=@cc, assigned_by=@actor, assigned_at=GETDATE() WHERE user_id=@uid
+        ELSE
+          INSERT INTO user_centers (user_id, home_center_code, assigned_by) VALUES (@uid, @cc, @actor)
+      `);
+
+    await tx.commit();
+    clearCache('sa:users');
+    res.json({ success: true, center_code });
+  } catch (err) { await tx.rollback(); console.error(err); res.status(500).json({ error: 'Center assignment failed' }); }
+});
+
+// ── GET /api/super-admin/users/unassigned ────────────────────
+router.get('/unassigned', async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.request().query(`
+      SELECT u.id, u.name, u.email, u.role, u.dept
+      FROM users u
+      WHERE u.center_code IS NULL OR u.center_code = ''
+      ORDER BY u.name
+    `);
+    res.json(result.recordset);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Query failed' }); }
 });
 
 export default router;

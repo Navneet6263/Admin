@@ -36,10 +36,16 @@ function Home() {
   const [showLoginCard, setShowLoginCard] = useState(false);
   const [mode, setMode] = useState<Mode>("signin");
   const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
+  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string }>>([
+    { id: 1, code: 'VI', name: 'Vision India' },
+    { id: 2, code: 'JJ', name: 'Just Job' },
+    { id: 3, code: 'LS', name: 'Live Skills' },
+  ]);
   const [formData, setFormData] = useState({
     name: "",
     email: "spoken.3764@gmail.com",
     password: "navneet",
+    company: "Vision India",
     department: DEPARTMENTS[0],
   });
   const [submitted, setSubmitted] = useState(false);
@@ -47,14 +53,19 @@ function Home() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false)
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setTeams(data);
-          setFormData((prev) => ({ ...prev, department: data[0].name }));
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false).catch(() => []),
+      request<Array<{ id: number; code: string; name: string }>>('/api/companies', {}, false).catch(() => []),
+    ]).then(([tData, cData]) => {
+      if (Array.isArray(tData) && tData.length > 0) {
+        setTeams(tData);
+        setFormData((prev) => ({ ...prev, department: tData[0].name }));
+      }
+      if (Array.isArray(cData) && cData.length > 0) {
+        setCompaniesList(cData);
+        setFormData((prev) => ({ ...prev, company: cData[0].name }));
+      }
+    });
   }, []);
 
   const switchMode = (next: Mode) => {
@@ -79,6 +90,27 @@ function Home() {
         void navigate({ to: target as '/admin' });
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Invalid credentials. Please check email & password.');
+      } finally {
+        setLoading(false);
+      }
+    } else if (mode === "register") {
+      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+        setError("Please fill in Name, Email and Password.");
+        return;
+      }
+      setLoading(true);
+      try {
+        const user = await session.register({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          password: formData.password.trim(),
+          company: formData.company,
+          dept: formData.department,
+        });
+        const target = user.role === 'super_admin' ? '/super-admin' : `/${user.role}`;
+        void navigate({ to: target as '/employee' });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Registration failed. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -273,30 +305,51 @@ function Home() {
                         </div>
 
                         {mode === "register" && (
-                          <div>
-                            <label htmlFor="login-department" className={labelClass}>
-                              Assigned Department / Team
-                            </label>
-                            <select
-                              id="login-department"
-                              required
-                              value={formData.department}
-                              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                              className={inputClass}
-                            >
-                              {teams.length > 0
-                                ? teams.map((t) => (
-                                    <option key={t.id} value={t.name}>
-                                      {t.name} ({t.company})
-                                    </option>
-                                  ))
-                                : DEPARTMENTS.map((d) => (
-                                    <option key={d} value={d}>
-                                      {d}
-                                    </option>
-                                  ))}
-                            </select>
-                          </div>
+                          <>
+                            <div>
+                              <label htmlFor="login-company" className={labelClass}>
+                                Company / Brand
+                              </label>
+                              <select
+                                id="login-company"
+                                required
+                                value={formData.company}
+                                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                                className={inputClass}
+                              >
+                                {companiesList.map((c) => (
+                                  <option key={c.id} value={c.name}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label htmlFor="login-department" className={labelClass}>
+                                Department
+                              </label>
+                              <select
+                                id="login-department"
+                                required
+                                value={formData.department}
+                                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                                className={inputClass}
+                              >
+                                {teams.length > 0
+                                  ? teams.map((t) => (
+                                      <option key={t.id} value={t.name}>
+                                        {t.name}
+                                      </option>
+                                    ))
+                                  : DEPARTMENTS.map((d) => (
+                                      <option key={d} value={d}>
+                                        {d}
+                                      </option>
+                                    ))}
+                              </select>
+                            </div>
+                          </>
                         )}
 
                         {mode !== "forgot" && (
