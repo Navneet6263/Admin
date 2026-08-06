@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 export interface CenterOption {
@@ -25,9 +26,12 @@ const centerLabel = (center: CenterOption) => {
 
 export function CenterCombobox({ centers, value, onChange, placeholder = "Search center…", dark = false, required, disabled, className = "" }: Props) {
   const root = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [menuBox, setMenuBox] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number }>({ left: 0, top: 0, width: 0, maxHeight: 256 });
   const selected = centers.find(center => center.code === value);
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -38,11 +42,36 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
     const close = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!root.current?.contains(target) && !menu.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
+  useEffect(() => {
+    if (!open) return;
+    const positionMenu = () => {
+      const rect = field.current?.getBoundingClientRect();
+      if (!rect) return;
+      const below = window.innerHeight - rect.bottom - 12;
+      const above = rect.top - 12;
+      const openUp = below < 260 && above > below;
+      const maxHeight = Math.max(120, Math.min(320, (openUp ? above : below) - 6));
+      setMenuBox({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)),
+        ...(openUp ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+        width: rect.width,
+        maxHeight,
+      });
+    };
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [open]);
 
   const choose = (center: CenterOption) => {
     onChange(center.code); setQuery(""); setOpen(false);
@@ -56,6 +85,7 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
     <div className="relative">
       <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${dark ? "text-slate-400" : "text-slate-500"}`} />
       <input
+        ref={field}
         value={open ? query : selected ? centerLabel(selected) : ""}
         required={required}
         disabled={disabled}
@@ -73,7 +103,9 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
       />
       <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${dark ? "text-slate-400" : "text-slate-500"}`} />
     </div>
-    {open && <div role="listbox" className={`request-scrollbar absolute z-[80] mt-1 w-full max-h-64 overflow-y-auto rounded-xl border p-1 shadow-2xl ${menuTone}`}>
+    {open && typeof document !== "undefined" && createPortal(<div ref={menu} role="listbox"
+      style={{ left: menuBox.left, top: menuBox.top, bottom: menuBox.bottom, width: menuBox.width, maxHeight: menuBox.maxHeight }}
+      className={`request-scrollbar fixed z-[200] overflow-y-auto rounded-xl border p-1 shadow-2xl ${menuTone}`}>
       {filtered.length ? filtered.map((center, index) => <button
         key={center.code} type="button" role="option" aria-selected={center.code === value}
         onMouseEnter={() => setActive(index)} onClick={() => choose(center)}
@@ -82,6 +114,6 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
         <span className="min-w-0 flex-1"><b className="font-mono">{center.code}</b><span className={dark ? "text-slate-300" : "text-slate-600"}> · {center.name}{center.city !== center.name ? `, ${center.city}` : ""}</span></span>
         {center.code === value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />}
       </button>) : <p className={`px-3 py-5 text-center text-xs ${dark ? "text-slate-400" : "text-slate-500"}`}>No center found</p>}
-    </div>}
+    </div>, document.body)}
   </div>;
 }

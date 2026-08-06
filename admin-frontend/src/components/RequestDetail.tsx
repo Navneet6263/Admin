@@ -3,7 +3,10 @@ import type { RequestItem } from "./models";
 import { typeLabels } from "./models";
 import { typeIcon, priorityTone, statusTone, fmtDateTime, fmtINR, relTime } from "./requestMeta";
 import { detailRows } from "./RequestForms";
-import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, ShieldCheck, Undo2 } from "lucide-react";
+import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, ShieldCheck, Undo2, Download } from "lucide-react";
+import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
+import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
+import type { BusinessCardDetails } from "./business-card/businessCardTemplates";
 
 interface Props {
   request: RequestItem;
@@ -85,6 +88,16 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
           <MetaField icon={Clock} label="Raised" value={fmtDateTime(request.createdAt)} sub={relTime(request.createdAt)} />
           <MetaField icon={Clock} label="Last update" value={fmtDateTime(request.updatedAt)} sub={relTime(request.updatedAt)} />
         </section>
+
+        {request.type === "visiting_card" && Boolean(request.details?.brand) && (
+          <section className="rounded-xl bg-slate-950 p-4">
+            <BusinessCardPreview details={request.details as unknown as BusinessCardDetails} />
+            <button type="button" onClick={() => void downloadBusinessCardPdf(request.details as unknown as BusinessCardDetails)}
+              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100">
+              <Download className="h-3.5 w-3.5" /> Download print PDF
+            </button>
+          </section>
+        )}
 
         {(() => {
           const rows = detailRows(request.type, request.details);

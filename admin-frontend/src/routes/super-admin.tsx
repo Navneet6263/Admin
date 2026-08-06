@@ -5,8 +5,10 @@ import {
   Download, ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus, KeyRound
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { CenterCombobox } from "@/components/CenterCombobox";
 import { type RequestItem, type RequestStatus } from "@/components/models";
-import { getRequests, request, session } from "@/lib/api";
+import { getRequests, request } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
 
 import { autoNote, buildHistory, fmtINR, type Tab, type UserRow, type CenterRow } from "@/components/super-admin/shared";
 import { StatChip } from "@/components/super-admin/widgets";
@@ -30,7 +32,8 @@ export const Route = createFileRoute("/super-admin")({
 });
 
 function SuperAdmin() {
-  const [sessionUser, setSessionUser] = useState(session.user);
+  const sessionUser = useSessionUser();
+  const [authenticated, setAuthenticated] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -40,8 +43,8 @@ function SuperAdmin() {
   // Centers state
   const [centerUsers, setCenterUsers] = useState<UserRow[]>([]);
   const [centers, setCenters] = useState<CenterRow[]>([]);
-  const [assigningId, setAssigningId] = useState<number | null>(null);
   const [centerSearch, setCenterSearch] = useState("");
+  const [scopeCenter, setScopeCenter] = useState("");
 
   const loadCentersData = useCallback(async () => {
     try {
@@ -54,22 +57,14 @@ function SuperAdmin() {
     } catch (e) { console.error(e); }
   }, []);
 
-  const assignCenter = useCallback(async (userId: number, centerCode: string) => {
-    setAssigningId(userId);
-    try {
-      await request(`/api/super-admin/users/${userId}/assign-center`, {
-        method: 'POST', body: { center_code: centerCode },
-      });
-      await loadCentersData();
-    } catch (e) { console.error(e); }
-    finally { setAssigningId(null); }
-  }, [loadCentersData]);
-
   const refresh = useCallback(async () => {
-    try { setRequests(await getRequests('/api/requests')); } catch (error) { console.error(error); }
-  }, []);
+    const center = scopeCenter ? `?center_code=${encodeURIComponent(scopeCenter)}` : "";
+    try { setRequests(await getRequests(`/api/requests${center}`)); } catch (error) { console.error(error); }
+  }, [scopeCenter]);
 
-  useEffect(() => { void refresh(); void session.me().then(setSessionUser); }, [refresh]);
+  useEffect(() => { if (sessionUser) setAuthenticated(true); }, [sessionUser]);
+  useEffect(() => { if (authenticated) void refresh(); }, [authenticated, refresh]);
+  useEffect(() => { if (authenticated) void loadCentersData(); }, [authenticated, loadCentersData]);
 
   const history = useMemo(() => buildHistory(requests), [requests]);
   const actor = sessionUser ? `${sessionUser.name} (USR-${sessionUser.id})` : "Authenticated Super Admin";
@@ -128,7 +123,7 @@ function SuperAdmin() {
     { id: "override", label: "Override Center", icon: ShieldCheck },
     { id: "anomalies", label: "Anomalies & Signals", icon: AlertTriangle },
     { id: "team", label: "Team & Roles", icon: UserPlus },
-    { id: "centers", label: "Centers & Assignment", icon: Building2 },
+    { id: "centers", label: "Centers & Locations", icon: Building2 },
     { id: "policies", label: "Approval Policies", icon: KeyRound },
   ];
 
@@ -150,6 +145,12 @@ function SuperAdmin() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              {scopeCenter && <button type="button" onClick={() => setScopeCenter("")}
+                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800">All Centers</button>}
+              <CenterCombobox centers={centers} value={scopeCenter} onChange={setScopeCenter}
+                placeholder="All centers · filter scope…" className="w-64" />
+            </div>
             <StatChip icon={Wallet} label="Rolling 12M spend" value={fmtINR(history.grandTotal)} />
             <StatChip icon={monthDelta >= 0 ? TrendingUp : TrendingDown} label="This month"
               value={fmtINR(history.thisMonth)} sub={`${monthDelta>=0?"▲":"▼"} ${Math.abs(monthDelta).toFixed(1)}%`}
@@ -160,25 +161,39 @@ function SuperAdmin() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 border-b border-slate-200 -mx-4 sm:-mx-6 px-4 sm:px-6 mt-5 overflow-x-auto">
-          {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                tab === t.id ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}>
-              <t.icon className="w-3.5 h-3.5" strokeWidth={1.75} />
-              {t.label}
+        <div className="-mx-4 mt-5 border-b border-slate-200 sm:-mx-6">
+          <div className="request-scrollbar flex min-h-11 items-stretch gap-1 overflow-x-auto px-4 sm:px-6">
+            {tabs.map((t) => {
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`relative flex h-11 shrink-0 items-center gap-1.5 px-3 text-xs font-medium leading-none whitespace-nowrap transition-colors duration-150 ${
+                    isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <t.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                  {t.label}
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute inset-x-2 bottom-0 h-0.5 rounded-full ${
+                      isActive ? "bg-slate-900" : "bg-transparent"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+            <button className="ml-auto inline-flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-[11px] font-medium leading-none whitespace-nowrap text-slate-600 transition-colors duration-150 hover:text-slate-900">
+              <Download className="h-3 w-3 shrink-0" /> Export CSV
             </button>
-          ))}
-          <button className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium bg-white border border-slate-200 rounded-md hover:bg-slate-50">
-            <Download className="w-3 h-3" /> Export CSV
-          </button>
+          </div>
         </div>
       </div>
 
       <div className="px-4 sm:px-6 pb-10">
-        {tab === "overview" && <OverviewTab requests={requests} history={history} />}
-        {tab === "analytics" && <AnalyticsTab requests={requests} history={history} />}
+        {tab === "overview" && <OverviewTab requests={requests} centerCode={scopeCenter} />}
+        {tab === "analytics" && <AnalyticsTab requests={requests} history={history} centerCode={scopeCenter} />}
         {tab === "inventory" && <InventoryTab />}
         {tab === "override" && (
           <OverrideTab
@@ -194,8 +209,6 @@ function SuperAdmin() {
         {tab === "centers" && (
           <CentersAssignmentPanel
             users={centerUsers} centers={centers}
-            assigningId={assigningId} search={centerSearch}
-            onSearch={setCenterSearch} onAssign={assignCenter}
             onLoad={loadCentersData}
           />
         )}

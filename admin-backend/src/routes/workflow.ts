@@ -21,23 +21,27 @@ router.get("/queue", async (req, res) => {
   );
   const status = String(req.query.status || "all");
   const role = effectiveRole(user.role);
+  const selectedCenter = typeof req.query.center_code === "string" && req.query.center_code !== "all"
+    && (role === "hq_admin" || role === "super_admin") ? req.query.center_code : null;
   try {
     const db = await pool
       .request()
       .input("uid", mssql.Int, user.id)
       .input("role", mssql.NVarChar(30), role)
       .input("cc", mssql.NVarChar(10), user.center_code || null)
+      .input("selectedCenter", mssql.NVarChar(10), selectedCenter)
       .input("status", mssql.NVarChar(30), status)
       .input("offset", mssql.Int, offset)
       .input("limit", mssql.Int, pageSize).query(`
         WITH visible AS (SELECT DISTINCT r.id,r.ref_id,r.user_id,r.type,r.subject,r.description,r.amount,r.priority,r.status,
           r.workflow_status,r.payment_status,r.home_center_code,r.request_center_code,r.approval_center_code,
           r.charge_center_code,r.inventory_center_code,r.created_at,r.updated_at,u.name employeeName,u.dept employeeDept,
-          a.assignment_type,CASE WHEN a.role=@role THEN a.can_act ELSE 0 END can_act
+          a.assignment_type,CASE WHEN a.role=@role OR (@role='hq_admin' AND a.role='admin') THEN a.can_act ELSE 0 END can_act
           FROM requests r JOIN users u ON u.id=r.user_id
           JOIN request_assignments a ON a.request_id=r.id AND a.is_active=1
-          WHERE (@status='all' OR r.workflow_status=@status) AND
-          (@role='super_admin' OR (@role='hq_admin' AND (@cc IS NULL OR r.approval_center_code=@cc)) OR (a.role=@role AND (a.user_id IS NULL OR a.user_id=@uid)
+          WHERE (@status='all' OR r.workflow_status=@status)
+          AND (@selectedCenter IS NULL OR r.approval_center_code=@selectedCenter) AND
+          (@role IN('super_admin','hq_admin') OR (a.role=@role AND (a.user_id IS NULL OR a.user_id=@uid)
             AND (@cc IS NULL OR a.center_code=@cc OR @role IN('hq_admin','finance','finance_head')))))
         SELECT *,COUNT(*) OVER() total_count FROM visible ORDER BY created_at DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
@@ -63,7 +67,7 @@ async function actionable(user: Express.Request["user"], requestId: number) {
     .input("cc", mssql.NVarChar(10), user!.center_code || null)
     .query(`SELECT TOP 1 r.* FROM requests r JOIN request_assignments a ON a.request_id=r.id
       WHERE r.id=@rid AND r.workflow_status='awaiting_approval' AND a.is_active=1 AND a.can_act=1
-      AND (@role='super_admin' OR (a.role=@role AND (a.user_id IS NULL OR a.user_id=@uid)
+      AND (@role='super_admin' OR ((a.role=@role OR (@role='hq_admin' AND a.role='admin')) AND (a.user_id IS NULL OR a.user_id=@uid)
         AND (@cc IS NULL OR a.center_code=@cc OR @role='hq_admin')))`);
   return result.recordset[0];
 }

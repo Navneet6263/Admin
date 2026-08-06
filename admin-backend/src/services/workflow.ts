@@ -50,7 +50,9 @@ export async function initializeWorkflow(
     .input("cc", mssql.NVarChar(10), requested)
     .query(`SELECT code FROM centers WHERE code=@cc AND is_active=1`);
   if (!center.recordset[0]) throw new Error("Invalid request center");
-  const owner = await approvalRole(category, requested, Number(amount || 0));
+  const owner = category === "visiting_card"
+    ? { role: "center_admin", userId: null }
+    : await approvalRole(category, requested, Number(amount || 0));
   const paymentRequired = paymentCategories.has(category);
   await pool
     .request()
@@ -105,6 +107,12 @@ export async function initializeWorkflow(
       "watching",
       "/center-admin",
     );
+  if (category === "visiting_card") {
+    await Promise.all([
+      notifyRole("hq_admin", null, `${ref} has a print-ready visiting card PDF for review.`, "approval_watch", "/admin"),
+      notifyRole("super_admin", null, `${ref} has a print-ready visiting card PDF for oversight.`, "approval_watch", "/super-admin"),
+    ]);
+  }
   return {
     homeCenter: home,
     requestCenter: requested,

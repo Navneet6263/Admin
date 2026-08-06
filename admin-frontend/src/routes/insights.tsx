@@ -8,8 +8,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { typeLabels, typeCategory, type RequestItem } from "@/components/models";
 import { typeIcon, fmtINR } from "@/components/requestMeta";
 import { PeopleInsights } from "@/components/insights/PeopleInsights";
-import { getRequests, session } from "@/lib/api";
-import { buildHistory, CATS } from "@/components/super-admin/shared";
+import { getRequests, request } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
+import { buildHistory, buildHistoryFromAggregates, CATS, availableFinancialYears, financialYearLabel as formatFinancialYear, financialYearStartFor, type SpendHeatmapResponse } from "@/components/super-admin/shared";
 import { AnomaliesTab } from "@/components/super-admin/AnomaliesTab";
 
 export const Route = createFileRoute("/insights")({
@@ -23,16 +24,31 @@ export const Route = createFileRoute("/insights")({
 });
 
 function Insights() {
-  const [sessionUser, setSessionUser] = useState(session.user);
+  const sessionUser = useSessionUser();
   const [hover, setHover] = useState<{ m: number; c: number } | null>(null);
   const [requests, setRequests] = useState<RequestItem[]>([]);
+  const currentFinancialYear = financialYearStartFor(new Date());
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState(currentFinancialYear);
+  const [aggregate, setAggregate] = useState<SpendHeatmapResponse | null>(null);
+  const financialYears = useMemo(() => availableFinancialYears(requests), [requests]);
   const refresh = useCallback(async () => { try { setRequests(await getRequests('/api/requests')); } catch (error) { console.error(error); } }, []);
-  useEffect(() => { void refresh(); void session.me().then(setSessionUser); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    let active = true;
+    setAggregate(null);
+    request<SpendHeatmapResponse>(`/api/dashboard/spend-heatmap?fy_start=${selectedFinancialYear}`)
+      .then((data) => { if (active) setAggregate(data); }).catch(console.error);
+    return () => { active = false; };
+  }, [selectedFinancialYear]);
   const live = useMemo(() => {
-    const history = buildHistory(requests);
+    const history = aggregate
+      ? buildHistoryFromAggregates(aggregate.heatmap, selectedFinancialYear)
+      : buildHistory(requests, selectedFinancialYear);
     return { ...history, maxCell: Math.max(...history.heat.flat(), 1) };
-  }, [requests]);
-  const { MONTHS, heat, monthTotals, catTotals, grandTotal, maxCell, thisMonth, lastMonth } = live;
+  }, [aggregate, requests, selectedFinancialYear]);
+  const { MONTHS, heat, monthTotals, catTotals, grandTotal, maxCell, thisMonth, lastMonth, financialYearLabel } = live;
+  const visibleMonths = monthTotals.map((value, index) => ({ value, index })).filter(({ value }) => value > 0);
+  const visibleCategories = catTotals.map((value, index) => ({ value, index })).filter(({ value }) => value > 0);
   const monthDelta = lastMonth ? (thisMonth - lastMonth) / lastMonth * 100 : 0;
   const heatColor = (value: number) => value / maxCell < .15 ? 'bg-slate-50 text-slate-400' : value / maxCell < .3 ? 'bg-sky-50 text-sky-700' : value / maxCell < .5 ? 'bg-sky-100 text-sky-800' : value / maxCell < .7 ? 'bg-indigo-200 text-indigo-900' : value / maxCell < .85 ? 'bg-indigo-400 text-white' : 'bg-indigo-600 text-white';
   const { depts, maxDept, approved, total, approvalRate, avgTat } = useMemo(() => {
@@ -45,10 +61,10 @@ function Insights() {
 
   const kpis = useMemo(() => [
     { label: "Spend · YTD", value: fmtINR(grandTotal), icon: Wallet, tone: "text-slate-900" },
-    { label: "This month", value: fmtINR(thisMonth), delta: monthDelta, icon: monthDelta >= 0 ? TrendingUp : TrendingDown },
+    { label: "This month", value: fmtINR(thisMonth), delta: MONTHS.length > 1 ? monthDelta : undefined, icon: monthDelta >= 0 ? TrendingUp : TrendingDown },
     { label: "Approval rate", value: `${approvalRate}%`, sub: `${approved}/${total} closed`, icon: CheckCircle2 },
     { label: "Avg turnaround", value: `${avgTat}h`, sub: "created → decided", icon: Clock },
-  ], [approved, approvalRate, avgTat, total]);
+  ], [MONTHS.length, approved, approvalRate, avgTat, grandTotal, monthDelta, thisMonth, total]);
 
   const peakCell = useMemo(() => {
     let best = { v: 0, m: 0, c: 0 };
@@ -64,7 +80,7 @@ function Insights() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-slate-400">Analytics</p>
             <h1 className="font-display text-2xl font-semibold text-slate-900 mt-1">Spend & Approval Insights</h1>
-            <p className="text-xs text-slate-500 mt-1">Rolling 12 months · live database records</p>
+            <p className="text-xs text-slate-500 mt-1">{financialYearLabel} · April–March · live database records</p>
           </div>
           <button className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md hover:bg-slate-50">
             <Download className="w-3.5 h-3.5" /> Export CSV
@@ -95,25 +111,33 @@ function Insights() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="font-display font-semibold text-slate-900">Spend heatmap</h2>
-              <p className="text-xs text-slate-500 mt-0.5">12 months × 7 categories · darker = higher outflow</p>
+              <p className="text-xs text-slate-500 mt-0.5">{financialYearLabel} · non-zero months and categories only · darker = higher outflow</p>
             </div>
-            <div className="hidden sm:flex items-center gap-2 text-[10px] text-slate-500">
-              <span>Low</span>
-              <div className="flex gap-0.5">
-                {["bg-slate-100","bg-sky-100","bg-sky-200","bg-indigo-300","bg-indigo-500","bg-indigo-700"].map(c =>
-                  <span key={c} className={`w-4 h-3 rounded-sm ${c}`} />
-                )}
+            <div className="flex items-center gap-3">
+              <select value={selectedFinancialYear} onChange={(event) => setSelectedFinancialYear(Number(event.target.value))}
+                aria-label="Select heatmap financial year"
+                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+                {financialYears.map((year) => <option key={year} value={year}>{formatFinancialYear(year)}{year === currentFinancialYear ? ' · Current' : year === currentFinancialYear - 1 ? ' · Previous' : ''}</option>)}
+              </select>
+              <div className="hidden sm:flex items-center gap-2 text-[10px] text-slate-500">
+                <span>Low</span>
+                <div className="flex gap-0.5">
+                  {["bg-slate-100","bg-sky-100","bg-sky-200","bg-indigo-300","bg-indigo-500","bg-indigo-700"].map(c =>
+                    <span key={c} className={`w-4 h-3 rounded-sm ${c}`} />
+                  )}
+                </div>
+                <span>High</span>
               </div>
-              <span>High</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {visibleMonths.length && visibleCategories.length ? <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] border-separate border-spacing-1">
               <thead>
                 <tr>
                   <th className="w-24"></th>
-                  {CATS.map(c => {
+                  {visibleCategories.map(({ index: ci }) => {
+                    const c = CATS[ci];
                     const Icon = typeIcon[c];
                     return (
                       <th key={c} className="text-[10px] font-medium text-slate-500 pb-1">
@@ -128,30 +152,36 @@ function Insights() {
                 </tr>
               </thead>
               <tbody>
-                {MONTHS.map((m, mi) => (
+                {visibleMonths.map(({ index: mi }) => {
+                  const m = MONTHS[mi];
+                  return (
                   <tr key={m}>
                     <td className="text-[11px] font-medium text-slate-600 pr-2 text-right tabular-nums">{m}</td>
-                    {heat[mi].map((v, ci) => (
+                    {visibleCategories.map(({ index: ci }) => {
+                      const v = heat[mi][ci];
+                      return (
                       <td
                         key={ci}
-                        onMouseEnter={() => setHover({ m: mi, c: ci })}
+                        onMouseEnter={() => { if (v > 0) setHover({ m: mi, c: ci }); }}
                         onMouseLeave={() => setHover(null)}
-                        className={`h-9 rounded-sm text-center text-[10px] font-mono tabular-nums cursor-pointer transition-all ${heatColor(v)} ${hover?.m === mi && hover?.c === ci ? "ring-2 ring-slate-900" : ""}`}
-                        title={`${typeLabels[CATS[ci]]} · ${m} · ${fmtINR(v)}`}
+                        className={`h-9 rounded-sm text-center text-[10px] font-mono tabular-nums transition-all ${v ? `cursor-pointer ${heatColor(v)}` : "bg-transparent"} ${hover?.m === mi && hover?.c === ci ? "ring-2 ring-slate-900" : ""}`}
+                        title={v > 0 ? `${typeLabels[CATS[ci]]} · ${m} · ${fmtINR(v)}` : undefined}
                       >
                         {v > maxCell * 0.5 ? `${Math.round(v / 1000)}k` : ""}
                       </td>
-                    ))}
+                      );
+                    })}
                     <td className="text-[11px] font-semibold text-slate-800 pl-2 tabular-nums text-right">
                       {fmtINR(monthTotals[mi])}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
-          </div>
+          </div> : <div className="grid min-h-36 place-items-center rounded-md border border-dashed border-slate-200 bg-slate-50/50 text-xs text-slate-500">No spend recorded in {financialYearLabel} yet.</div>}
 
-          <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-md">
+          {grandTotal > 0 && <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-md">
             <Flame className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-900">
               <span className="font-semibold">Peak outflow:</span> {typeLabels[CATS[peakCell.c]]} in {MONTHS[peakCell.m]} — {fmtINR(peakCell.v)}.
@@ -161,7 +191,7 @@ function Insights() {
                 </span>
               )}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Two-column: Departments + Category mix */}

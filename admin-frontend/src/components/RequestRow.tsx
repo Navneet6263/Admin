@@ -8,9 +8,10 @@ interface Props {
   checked: boolean;
   onToggleCheck: (id: string) => void;
   onSelect: (id: string) => void;
+  checkDisabled?: boolean;
 }
 
-export function RequestRow({ request, selected, checked, onToggleCheck, onSelect }: Props) {
+export function RequestRow({ request, selected, checked, onToggleCheck, onSelect, checkDisabled = false }: Props) {
   const Icon = typeIcon[request.type];
   const pri = priorityTone[request.priority];
   const st = statusTone[request.status];
@@ -28,9 +29,11 @@ export function RequestRow({ request, selected, checked, onToggleCheck, onSelect
         <input
           type="checkbox"
           checked={checked}
+          disabled={checkDisabled}
+          title={checkDisabled ? "View only — this request is assigned to another approver" : "Select request"}
           onClick={(e) => e.stopPropagation()}
           onChange={() => onToggleCheck(request.id)}
-          className="mt-1 w-3.5 h-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400 accent-slate-900 shrink-0"
+          className="mt-1 w-3.5 h-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400 accent-slate-900 shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
         />
         <div className={`mt-0.5 w-6 h-6 grid place-items-center rounded-lg ${pri.bg} border shrink-0`}>
           <Icon className="w-3.5 h-3.5 text-slate-700" strokeWidth={1.75} />

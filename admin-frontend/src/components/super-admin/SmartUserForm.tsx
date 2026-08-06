@@ -7,6 +7,8 @@ interface SmartUserFormProps {
   companiesList: Array<{ id: number; code: string; name: string; legal_name: string }>;
   teams: Array<{ id: number; name: string; company: string }>;
   onCreated: () => void;
+  userApiBase?: string;
+  allowedRoles?: RoleKey[];
 }
 
 const ROLE_CARDS = [
@@ -75,7 +77,13 @@ const ROLE_CARDS = [
 
 type RoleKey = typeof ROLE_CARDS[number]['role'];
 
-export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserFormProps) {
+export function SmartUserForm({
+  companiesList,
+  teams,
+  onCreated,
+  userApiBase = '/api/super-admin/users',
+  allowedRoles,
+}: SmartUserFormProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [role, setRole] = useState<RoleKey | ''>('');
   const [name, setName] = useState('');
@@ -91,7 +99,7 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
 
   // Load centers when center_admin or employee role selected
   useEffect(() => {
-    if ((role === 'center_admin' || role === 'employee' || role === 'hq_admin') && centers.length === 0) {
+    if ((role === 'center_admin' || role === 'employee') && centers.length === 0) {
       request<Array<{ id: number; code: string; name: string; city: string }>>('/api/centers')
         .then(setCenters).catch(console.error);
     }
@@ -99,7 +107,7 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
 
   const selectedCard = ROLE_CARDS.find(c => c.role === role);
 
-  const needsCenter  = role === 'center_admin' || role === 'employee' || role === 'hq_admin';
+  const needsCenter  = role === 'center_admin' || role === 'employee';
   const needsDept    = role === 'employee' || role === 'finance' || role === 'finance_head' || role === 'verifier';
   const needsCompany = role !== 'super_admin';
 
@@ -129,15 +137,15 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
       if (needsDept)    payload.dept = dept;
       if (centerCode)   payload.center_code = centerCode;
 
-      const res = await request<{ name: string; email: string }>('/api/super-admin/users', {
+      const res = await request<{ name: string; email: string }>(userApiBase, {
         method: 'POST', body: payload,
       });
 
       if (centerCode && res) {
-        const newUsers = await request<Array<{ id: number; email: string }>>('/api/super-admin/users');
+        const newUsers = await request<Array<{ id: number; email: string }>>(userApiBase);
         const created = newUsers.find(u => u.email === email);
         if (created) {
-          await request(`/api/super-admin/users/${created.id}/assign-center`, {
+          await request(`${userApiBase}/${created.id}/assign-center`, {
             method: 'POST', body: { center_code: centerCode },
           });
         }
@@ -198,7 +206,7 @@ export function SmartUserForm({ companiesList, teams, onCreated }: SmartUserForm
           <div>
             <p className="text-sm text-slate-600 mb-4 font-medium">Is user ka role kya hai?</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {ROLE_CARDS.map((card) => (
+              {ROLE_CARDS.filter((card) => !allowedRoles || allowedRoles.includes(card.role)).map((card) => (
                 <button
                   key={card.role}
                   type="button"

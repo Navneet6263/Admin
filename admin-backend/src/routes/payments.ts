@@ -9,6 +9,7 @@ router.get("/", async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(100, Math.max(10, Number(req.query.page_size) || 25));
   const status = String(req.query.status || "all");
+  const requestId = Number(req.query.request_id) || 0;
   const user = req.user!;
   try {
     const result = await pool
@@ -17,17 +18,18 @@ router.get("/", async (req, res) => {
       .input("role", mssql.NVarChar(30), user.role)
       .input("cc", mssql.NVarChar(10), user.center_code || null)
       .input("uid", mssql.Int, user.id)
+      .input("requestId", mssql.Int, requestId)
       .input("offset", mssql.Int, (page - 1) * size)
       .input("size", mssql.Int, size)
       .query(`SELECT p.*,r.ref_id,r.type,r.subject,
         r.charge_center_code,r.approval_center_code,u.name employee_name,COUNT(*) OVER() total
         FROM payments p JOIN requests r ON r.id=p.request_id JOIN users u ON u.id=r.user_id
-        WHERE (@status='all' OR p.status=@status) AND
+        WHERE (@status='all' OR p.status=@status) AND (@requestId=0 OR p.request_id=@requestId) AND
           (@role='super_admin' OR EXISTS(SELECT 1 FROM approval_policies ap WHERE ap.is_active=1 AND ap.can_view=1
             AND ap.role=@role AND (ap.user_id IS NULL OR ap.user_id=@uid)
             AND (ap.center_code IS NULL OR ap.center_code=r.approval_center_code)
             AND (ap.category IS NULL OR ap.category=r.type)))
-          AND (@role NOT IN('center_admin','hq_admin','admin') OR @cc IS NULL OR r.approval_center_code=@cc)
+          AND (@role<>'center_admin' OR @cc IS NULL OR r.approval_center_code=@cc)
         ORDER BY CASE WHEN p.status='awaiting_update' THEN 0 WHEN p.status='awaiting_verification' THEN 1 ELSE 2 END,p.due_at
         OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`);
     res.json({
@@ -162,14 +164,17 @@ router.get("/analytics/summary", async (req, res) => {
     const access = await authorize(req.user!, "can_view_analytics");
     if (!access.allowed)
       return res.status(403).json({ error: "Analytics permission required" });
+    const center = typeof req.query.center_code === "string" ? req.query.center_code : "all";
     res.json(
       (
-        await pool.request()
+        await pool.request().input("center", mssql.NVarChar(10), center)
           .query(`SELECT r.charge_center_code center_code,r.type,
     COUNT(*) request_count,SUM(COALESCE(p.actual_amount,p.estimated_amount,0)) total_spend,
     SUM(CASE WHEN p.status='paid' THEN 1 ELSE 0 END) paid_count,
     SUM(CASE WHEN p.status<>'paid' THEN 1 ELSE 0 END) pending_count
-    FROM payments p JOIN requests r ON r.id=p.request_id GROUP BY r.charge_center_code,r.type`)
+    FROM payments p JOIN requests r ON r.id=p.request_id
+    WHERE (@center='all' OR r.charge_center_code=@center)
+    GROUP BY r.charge_center_code,r.type`)
       ).recordset,
     );
   } catch (error) {

@@ -1,21 +1,16 @@
-import { useEffect, useState } from "react";
-import { Building2, AlertTriangle, Plus, Edit2, Copy, Check, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Plus, Edit2, Copy, Check, Sparkles, Search } from "lucide-react";
 import { request } from "@/lib/api";
 import { type UserRow, type CenterRow } from "./shared";
-import { CenterCombobox } from "@/components/CenterCombobox";
 import { useCompanies } from "@/lib/directory";
 
 interface CentersAssignmentPanelProps {
   users: UserRow[];
   centers: CenterRow[];
-  assigningId: number | null;
-  search: string;
-  onSearch: (v: string) => void;
-  onAssign: (userId: number, centerCode: string) => void;
   onLoad: () => void;
 }
 
-export function CentersAssignmentPanel({ users, centers, assigningId, search, onSearch, onAssign, onLoad }: CentersAssignmentPanelProps) {
+export function CentersAssignmentPanel({ users, centers, onLoad }: CentersAssignmentPanelProps) {
   const companies = useCompanies();
   useEffect(() => { onLoad(); }, [onLoad]);
 
@@ -42,11 +37,7 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
   // Copy indicator state
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // Self Join test state
-  const [joinUserId, setJoinUserId] = useState("");
-  const [joinCodeInput, setJoinCodeInput] = useState("");
-  const [joining, setJoining] = useState(false);
-  const [joinResMsg, setJoinResMsg] = useState("");
+  const [centerQuery, setCenterQuery] = useState("");
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -100,29 +91,17 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
     } finally { setUpdating(false); }
   };
 
-  const handleJoinByCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!joinUserId || !joinCodeInput) return;
-    setJoining(true); setJoinResMsg("");
-    try {
-      const res = await request<{ success: boolean }>(`/api/super-admin/users/${joinUserId}/assign-center`, {
-        method: 'POST',
-        body: { center_code: joinCodeInput },
-      });
-      setJoinResMsg(res.success ? 'Successfully linked center' : 'Center assignment failed');
-      onLoad();
-    } catch (err) {
-      setJoinResMsg(err instanceof Error ? err.message : "Failed to join center");
-    } finally { setJoining(false); }
-  };
-
-  const filtered = users.filter(u =>
-    !search || u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    (u.center_name ?? "").toLowerCase().includes(search.toLowerCase())
-  );
-
-  const unassigned = filtered.filter(u => !u.center_code).length;
+  const employeeCountByCenter = useMemo(() => users.reduce<Record<string, number>>((counts, user) => {
+    if (user.center_code) counts[user.center_code] = (counts[user.center_code] ?? 0) + 1;
+    return counts;
+  }, {}), [users]);
+  const visibleCenters = useMemo(() => {
+    const query = centerQuery.trim().toLowerCase();
+    if (!query) return centers;
+    return centers.filter(center =>
+      `${center.code} ${center.name} ${center.city} ${center.company}`.toLowerCase().includes(query)
+    );
+  }, [centerQuery, centers]);
 
   return (
     <div className="px-1 space-y-6">
@@ -136,12 +115,6 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
         </div>
 
         <div className="flex items-center gap-2">
-          {unassigned > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
-              <AlertTriangle className="w-3.5 h-3.5" /> {unassigned} unassigned
-            </span>
-          )}
-
           <button
             onClick={() => { setShowCreateModal(true); setCreateErr(""); setCreateMsg(""); }}
             className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
@@ -152,15 +125,24 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
       </div>
 
       {/* Centers Summary & Edit Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Group Centers ({centers.length})</h3>
-          <span className="text-[10px] text-slate-400">Click Code to Copy · Click Edit to Update</span>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70">
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Active Group Centers ({centers.length})</h3>
+            <span className="text-[10px] text-slate-400">Showing {visibleCenters.length} · Click code to copy · Edit to update</span>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={centerQuery} onChange={event => setCenterQuery(event.target.value)}
+              placeholder="Search center, city, company or code…"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-800 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-200/60" />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {centers.map(c => {
-            const count = users.filter(u => u.center_code === c.code).length;
+        <div className="request-scrollbar max-h-[min(62vh,620px)] overflow-y-auto p-3 sm:p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visibleCenters.map(c => {
+            const count = employeeCountByCenter[c.code] ?? 0;
             return (
               <div key={c.code} className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-3.5 shadow-sm transition-all relative group">
                 <div className="flex items-center justify-between mb-1.5">
@@ -178,7 +160,7 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
                       setEditingCenter(c);
                       setEditName(c.name);
                       setEditCity(c.city);
-                      setEditCompany(c.company || "VT");
+                      setEditCompany(c.company || "Vision India");
                       setEditActive(c.is_active !== false);
                       setEditMsg("");
                     }}
@@ -201,6 +183,12 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
               </div>
             );
           })}
+          </div>
+          {visibleCenters.length === 0 && (
+            <div className="grid min-h-48 place-items-center text-center">
+              <div><Search className="mx-auto mb-2 h-6 w-6 text-slate-300" /><p className="text-sm font-medium text-slate-500">No matching center found</p><p className="mt-1 text-xs text-slate-400">Try a code, city, company, or center name.</p></div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -213,104 +201,10 @@ export function CentersAssignmentPanel({ users, centers, assigningId, search, on
             <p className="text-xs text-slate-500 mt-0.5">
               Employees can enter their office Center Code (e.g. <span className="font-mono font-bold text-indigo-600">A11</span>, <span className="font-mono font-bold text-indigo-600">B01</span>, <span className="font-mono font-bold text-indigo-600">C01</span>) during registration or login to automatically join their center!
             </p>
+            <p className="mt-1 text-[10px] font-medium text-indigo-600">Manual user assignment is managed only from Team & Roles → Team Roster.</p>
           </div>
         </div>
 
-        {/* Quick Join Test Form */}
-        <form onSubmit={handleJoinByCode} className="flex items-center gap-2 w-full md:w-auto shrink-0 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-          <select
-            value={joinUserId}
-            onChange={e => setJoinUserId(e.target.value)}
-            className="text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 focus:outline-none"
-          >
-            <option value="">Select User</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>#{u.id} {u.name}</option>
-            ))}
-          </select>
-
-          <input
-            type="text"
-            value={joinCodeInput}
-            onChange={e => setJoinCodeInput(e.target.value)}
-            placeholder="Enter Code (e.g. B01)"
-            className="w-28 text-xs border border-slate-200 rounded px-2 py-1 uppercase font-mono font-bold text-indigo-600 focus:outline-none"
-          />
-
-          <button
-            type="submit"
-            disabled={joining}
-            className="px-3 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded transition-all disabled:opacity-50 whitespace-nowrap"
-          >
-            {joining ? 'Linking…' : 'Link Center'}
-          </button>
-        </form>
-      </div>
-      {joinResMsg && (
-        <div className={`text-xs p-2.5 rounded-lg border ${joinResMsg.includes('Successfully') || joinResMsg.includes('✅') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>
-          {joinResMsg}
-        </div>
-      )}
-
-      {/* Search Bar */}
-      <div className="relative">
-        <input
-          type="text" value={search} onChange={e => onSearch(e.target.value)}
-          placeholder="Search employees by name, email, or assigned center…"
-          className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        />
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-      </div>
-
-      {/* Users Assignment Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Employee</th>
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Role / Dept</th>
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Current Center</th>
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Assign Center</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u, i) => (
-              <tr key={u.id} className={`border-b border-slate-100 ${i % 2 === 0 ? "" : "bg-slate-50/50"} hover:bg-indigo-50/30 transition-colors`}>
-                <td className="px-5 py-3.5">
-                  <div className="font-semibold text-slate-800">{u.name}</div>
-                  <div className="text-xs text-slate-400">{u.email}</div>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className="inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-100 text-slate-600 capitalize">{u.role}</span>
-                  {u.dept && <div className="text-xs text-slate-400 mt-0.5">{u.dept}</div>}
-                </td>
-                <td className="px-5 py-3.5">
-                  {u.center_code ? (
-                    <div>
-                      <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{u.center_code}</span>
-                      <div className="text-xs text-slate-500 mt-0.5">{u.center_name} · {u.center_city}</div>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded">⚠ Not assigned</span>
-                  )}
-                </td>
-                <td className="px-5 py-3.5">
-                  <CenterCombobox centers={centers.filter(c => c.is_active !== false)} value={u.center_code ?? ""}
-                    onChange={(code) => onAssign(u.id, code)} disabled={assigningId === u.id}
-                    placeholder="Search center…" className="w-64" />
-                  {assigningId === u.id && <span className="ml-2 text-xs text-indigo-500 animate-pulse">Saving…</span>}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-5 py-10 text-center text-slate-400 text-sm">
-                  No users found matching "{search}"
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
 
       {/* CREATE CENTER MODAL */}

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { request, session, type Paged } from "@/lib/api";
+import { request, type Paged } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
 import { CenterBudgetRing } from "@/components/center-admin/CenterBudgetRing";
 import { CenterRequestCard, type CenterRequest } from "@/components/center-admin/CenterRequestCard";
 import { CenterStatsRow } from "@/components/center-admin/CenterStatsRow";
@@ -35,7 +36,7 @@ function CenterAdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [loading, setLoading] = useState(true);
-  const user = session.user;
+  const user = useSessionUser();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);

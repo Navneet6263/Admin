@@ -294,7 +294,7 @@ function EmployeeConsole() {
         </div>
       )}
 
-      <NewRequestDialog open={dialogOpen} initialType={prefillType} centers={centers} homeCenter={currentUser.center_code || ""}
+      <NewRequestDialog open={dialogOpen} initialType={prefillType} centers={centers} homeCenter={currentUser.center_code || ""} employeeProfile={currentUser}
         onClose={() => { setDialogOpen(false); setPrefillType(null); }}
         onSubmit={submitDraft} />
     </DashboardLayout>

@@ -40,6 +40,7 @@ app.use('/api/center-admin',   requireAuth('center_admin', 'super_admin'), cente
 app.use('/api/dashboard',      requireAuth('hq_admin', 'admin', 'super_admin'), dashboardRoutes);
 app.use('/api/requests',       requireAuth('employee', 'hq_admin', 'admin', 'center_admin', 'finance', 'verifier', 'super_admin'), requestRoutes);
 app.use('/api/inventory',      requireAuth('employee', 'hq_admin', 'admin', 'center_admin', 'verifier', 'finance', 'super_admin'), inventoryRoutes);
+app.use('/api/admin/users',    requireAuth('hq_admin', 'admin'), usersRoutes);
 app.use('/api/admin',          requireAuth('hq_admin', 'admin'), adminRoutes);
 app.use('/api/employee',       requireAuth('employee'), employeeRoutes);
 app.use('/api/verifier',       requireAuth('verifier'), verifierRoutes);

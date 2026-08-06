@@ -4,7 +4,7 @@ import { typeIcon } from "@/components/requestMeta";
 import { CATS, buildHistory, fmtINR } from "./shared";
 import { ExpenseAnalytics } from "@/components/analytics/ExpenseAnalytics";
 
-export function AnalyticsTab({ requests, history }: { requests: RequestItem[]; history: ReturnType<typeof buildHistory> }) {
+export function AnalyticsTab({ requests, history, centerCode = "" }: { requests: RequestItem[]; history: ReturnType<typeof buildHistory>; centerCode?: string }) {
   const { MONTHS, heat, monthTotals, forecast, avg6 } = history;
   const trend = [...monthTotals, ...forecast];
   const trendMax = Math.max(...trend, 1);
@@ -31,7 +31,7 @@ export function AnalyticsTab({ requests, history }: { requests: RequestItem[]; h
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
-      <ExpenseAnalytics />
+      <ExpenseAnalytics centerCode={centerCode} />
       {/* Forecast card */}
       <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-lg p-5">
         <div className="flex items-start justify-between gap-4 mb-4">

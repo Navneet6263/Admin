@@ -30,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/teams/create — Super Admin creates a new Team ─────────────────
-router.post('/create', requireAuth('super_admin'), async (req: Request, res: Response) => {
+router.post('/create', requireAuth('hq_admin', 'admin'), async (req: Request, res: Response) => {
   const { name, company = 'VT' } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Team name is required' });
 

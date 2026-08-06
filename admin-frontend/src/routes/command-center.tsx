@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { request, session } from "@/lib/api";
+import { request } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
 import {
   Activity, TrendingUp, AlertTriangle, CheckCircle2,
   MapPin, Clock, IndianRupee, Zap, BarChart3, Users, ArrowUpRight
@@ -147,7 +148,7 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
 }
 
 function CommandCenter() {
-  const [sessionUser, setSessionUser] = useState(session.user);
+  const sessionUser = useSessionUser();
   const [centers, setCenters]   = useState<CenterHealth[]>([]);
   const [burnData, setBurnData] = useState<BurnRate[]>([]);
   const [peers, setPeers]       = useState<PeerRow[]>([]);
@@ -170,7 +171,7 @@ function CommandCenter() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void fetchAll(); void session.me().then(setSessionUser); }, [fetchAll]);
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
   // Auto-refresh every 60s
   useEffect(() => { const t = setInterval(fetchAll, 60000); return () => clearInterval(t); }, [fetchAll]);
 

@@ -64,6 +64,14 @@ async function runMigrations() {
       IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('users') AND name='center_code')
         ALTER TABLE users ADD center_code NVARCHAR(10) NULL`);
 
+    // HQ and Super Admin are global roles; center assignment is only a dashboard filter.
+    await pool.request().query(`
+      DELETE uc FROM user_centers uc JOIN users u ON u.id=uc.user_id
+        WHERE u.role IN ('hq_admin','admin','super_admin');
+      UPDATE users SET center_code=NULL
+        WHERE role IN ('hq_admin','admin','super_admin') AND center_code IS NOT NULL;
+    `);
+
     // Add center columns to requests if missing
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('requests') AND name='home_center_code')

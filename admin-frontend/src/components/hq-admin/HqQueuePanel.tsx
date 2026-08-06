@@ -35,13 +35,15 @@ export function HqQueuePanel({
   onToggleAll, onToggleCheck, onSelect, onClearChecked,
   onBatchQueue, onBatchApprove, onDetailAction,
 }: Props) {
+  const actionable = filtered.filter((request) => request.canAct);
   return (
     <div className="mx-4 sm:mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-4 h-[calc(100vh-16rem)] min-h-[600px]">
       <div className="bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-3">
           <input
             type="checkbox"
-            checked={filtered.length > 0 && checked.size === filtered.length}
+            checked={actionable.length > 0 && checked.size === actionable.length}
+            disabled={actionable.length === 0}
             onChange={onToggleAll}
             className="w-3.5 h-3.5 rounded border-slate-300 accent-slate-900"
           />
@@ -87,6 +89,7 @@ export function HqQueuePanel({
               checked={checked.has(r.id)}
               onToggleCheck={onToggleCheck}
               onSelect={onSelect}
+              checkDisabled={!r.canAct}
             />
           ))}
         </div>
@@ -94,7 +97,7 @@ export function HqQueuePanel({
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         {selected ? (
-          <RequestDetail request={selected} onAction={onDetailAction} />
+          <RequestDetail request={selected} onAction={onDetailAction} readOnly={!selected.canAct} />
         ) : (
           <div className="h-full grid place-items-center text-sm text-slate-400">Select a request to review.</div>
         )}

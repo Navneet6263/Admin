@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  Users, TrendingUp, Repeat, Crown, ChevronRight, ArrowUpRight, AlertCircle,
+  Users, TrendingUp, Repeat, Crown, ChevronRight, ArrowUpRight, AlertCircle, Search, X,
 } from "lucide-react";
 import { typeLabels, type RequestItem, type RequestType } from "@/components/models";
 import { fmtINR } from "@/components/requestMeta";
@@ -61,6 +61,16 @@ const deptTone = (d: string) => {
 export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
   const stats = useMemo(() => buildEmployeeStats(requests), [requests]);
   const [openId, setOpenId] = useState<number | null>(stats[0]?.id ?? null);
+  const [employeeQuery, setEmployeeQuery] = useState("");
+  const filteredStats = useMemo(() => {
+    const q = employeeQuery.trim().toLowerCase();
+    if (!q) return stats;
+    return stats.filter((s) =>
+      s.name.toLowerCase().includes(q)
+      || s.dept.toLowerCase().includes(q)
+      || `emp-${String(s.id).padStart(3, "0")}`.includes(q),
+    );
+  }, [employeeQuery, stats]);
   const open = stats.find(s => s.id === openId) ?? null;
 
   const maxApproved = Math.max(...stats.map(s => s.approvedSpend), 1);
@@ -114,17 +124,39 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
       {/* Employee leaderboard + drill-down */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-3 bg-white rounded-lg border border-slate-200/70 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="font-display font-semibold text-slate-900 text-sm">Spend leaderboard</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">Click a row to drill down · approved outflow YTD</p>
+          <div className="px-4 sm:px-5 py-3 border-b border-slate-100 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display font-semibold text-slate-900 text-sm">Spend leaderboard</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Click a row to drill down · approved outflow YTD</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-slate-500">
+                <Users className="w-3 h-3" />
+                {employeeQuery ? `${filteredStats.length} of ${stats.length}` : stats.length} employees
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-              <Users className="w-3 h-3" /> {stats.length} employees
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={employeeQuery}
+                onChange={(event) => setEmployeeQuery(event.target.value)}
+                placeholder="Search employee, department or ID…"
+                aria-label="Search spend leaderboard employees"
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50/70 pl-9 pr-9 text-xs text-slate-800 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-200/70"
+              />
+              {employeeQuery && (
+                <button type="button" onClick={() => setEmployeeQuery("")}
+                  aria-label="Clear employee search"
+                  className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-700">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
-          <div className="divide-y divide-slate-100">
-            {stats.map((s, idx) => {
+          <div className="max-h-[520px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            {filteredStats.map((s) => {
+              const rank = stats.findIndex((row) => row.id === s.id) + 1;
               const pct = (s.approvedSpend / maxApproved) * 100;
               const active = s.id === openId;
               return (
@@ -134,7 +166,7 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
                   className={`w-full text-left px-5 py-3 hover:bg-slate-50/70 transition-colors ${active ? "bg-slate-50" : ""}`}
                 >
                   <div className="grid grid-cols-[24px_36px_1fr_120px_20px] items-center gap-3">
-                    <span className="text-[10px] font-mono tabular-nums text-slate-400">#{idx + 1}</span>
+                    <span className="text-[10px] font-mono tabular-nums text-slate-400">#{rank}</span>
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center text-[10px] font-semibold text-white">
                       {initials(s.name)}
                     </div>
@@ -162,6 +194,13 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
                 </button>
               );
             })}
+            {filteredStats.length === 0 && (
+              <div className="px-5 py-12 text-center">
+                <Search className="mx-auto h-5 w-5 text-slate-300" />
+                <p className="mt-2 text-xs font-medium text-slate-600">No employee found</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">Try another name, department or employee ID.</p>
+              </div>
+            )}
           </div>
         </div>
 

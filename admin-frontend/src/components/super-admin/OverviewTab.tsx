@@ -1,29 +1,62 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2 } from "lucide-react";
 import { PeopleInsights } from "@/components/insights/PeopleInsights";
 import { typeLabels, typeCategory, type RequestItem } from "@/components/models";
 import { useCompanies } from "@/lib/directory";
 import { typeIcon } from "@/components/requestMeta";
-import { CATS, heatColor, fmtINR, buildHistory } from "./shared";
+import { request } from "@/lib/api";
+import { CATS, heatColor, fmtINR, buildHistory, buildHistoryFromAggregates, availableFinancialYears, financialYearLabel as formatFinancialYear, financialYearStartFor, type SpendHeatmapResponse } from "./shared";
 
-export function OverviewTab({ requests, history }: {
-  requests: RequestItem[];
-  history: ReturnType<typeof buildHistory>;
-}) {
+export function OverviewTab({ requests, centerCode = "" }: { requests: RequestItem[]; centerCode?: string }) {
   const companies = useCompanies();
-  const { MONTHS: labels, heat: h, monthTotals: mt, catTotals, grandTotal } = history;
+  const currentFinancialYear = financialYearStartFor(new Date());
+  const financialYears = useMemo(() => availableFinancialYears(requests), [requests]);
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState(currentFinancialYear);
+  const [aggregate, setAggregate] = useState<SpendHeatmapResponse | null>(null);
+  useEffect(() => {
+    let active = true;
+    const center = centerCode ? `&center_code=${encodeURIComponent(centerCode)}` : '';
+    setAggregate(null);
+    request<SpendHeatmapResponse>(`/api/dashboard/spend-heatmap?fy_start=${selectedFinancialYear}${center}`)
+      .then((data) => { if (active) setAggregate(data); }).catch(console.error);
+    return () => { active = false; };
+  }, [centerCode, selectedFinancialYear]);
+  const history = useMemo(() => aggregate
+    ? buildHistoryFromAggregates(aggregate.heatmap, selectedFinancialYear)
+    : buildHistory(requests, selectedFinancialYear), [aggregate, requests, selectedFinancialYear]);
+  const { MONTHS: labels, heat: h, monthTotals: mt, catTotals, grandTotal, financialYearLabel: selectedFinancialYearLabel } = history;
   const maxCell = Math.max(...h.flat(), 1);
+  const visibleMonths = mt.map((total, index) => ({ total, index })).filter(({ total }) => total > 0);
+  const visibleCategories = catTotals.map((total, index) => ({ total, index })).filter(({ total }) => total > 0);
 
-  const companySpend = useMemo(() =>
-    requests.reduce<Record<string, { spend: number; count: number }>>((acc, row) => {
-      if (row.status !== 'rejected') {
-        const v = acc[row.company] ?? { spend: 0, count: 0 };
+  const normalizeCompany = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const companySpend = useMemo(() => {
+    if (aggregate) return aggregate.companies.reduce<Record<string, { spend: number; count: number }>>((acc, row) => {
+      acc[normalizeCompany(row.company)] = { spend: Number(row.total_spend || 0), count: Number(row.request_count || 0) };
+      return acc;
+    }, {});
+    const periodStart = new Date(selectedFinancialYear, 3, 1).getTime();
+    const periodEnd = new Date(selectedFinancialYear + 1, 3, 1).getTime();
+    return requests.reduce<Record<string, { spend: number; count: number }>>((acc, row) => {
+      const createdAt = new Date(row.createdAt).getTime();
+      if (row.status !== 'rejected' && createdAt >= periodStart && createdAt < periodEnd) {
+        const key = normalizeCompany(row.company);
+        const v = acc[key] ?? { spend: 0, count: 0 };
         v.spend += row.amount ?? 0; v.count++;
-        acc[row.company] = v;
+        acc[key] = v;
       }
       return acc;
-    }, {})
-  , [requests]);
+    }, {});
+  }, [aggregate, requests, selectedFinancialYear]);
+  const companyCards = companies.map((company) => {
+    const keys = [...new Set([company.code, company.name, company.legal_name].map(normalizeCompany))];
+    const totals = keys.reduce((sum, key) => ({
+      spend: sum.spend + (companySpend[key]?.spend ?? 0),
+      count: sum.count + (companySpend[key]?.count ?? 0),
+    }), { spend: 0, count: 0 });
+    return { company, totals };
+  });
+  const maxCompanySpend = Math.max(...companyCards.map(({ totals }) => totals.spend), 1);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -34,19 +67,17 @@ export function OverviewTab({ requests, history }: {
             <h2 className="font-display font-semibold text-slate-900 flex items-center gap-2">
               <Building2 className="w-4 h-4 text-slate-500" /> Group spend by sub-entity
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Approved + pending outflow YTD across Vision India Group</p>
+            <p className="text-xs text-slate-500 mt-0.5">Approved + pending outflow · {selectedFinancialYearLabel} · company code/name normalized</p>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {companies.map(c => {
-            const s = companySpend[c.code] ?? { spend: 0, count: 0 };
-            const max = Math.max(...Object.values(companySpend).map(x => x.spend), 1);
-            const pct = (s.spend / max) * 100;
+          {companyCards.map(({ company: c, totals: s }) => {
+            const pct = (s.spend / maxCompanySpend) * 100;
             return (
               <div key={c.code} className="border border-slate-200/70 rounded-md p-3">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[10px] text-slate-500">{c.code}</span>
-                  <span className="text-[10px] text-slate-400">Database entity</span>
+                  <span className="text-[10px] text-slate-400">{s.count} requests</span>
                 </div>
                 <p className="text-xs font-semibold text-slate-800 truncate mt-1">{c.name}</p>
                 <p className="font-display text-lg font-semibold text-slate-900 mt-1 tabular-nums">{fmtINR(s.spend)}</p>
@@ -61,18 +92,24 @@ export function OverviewTab({ requests, history }: {
 
       {/* Heatmap */}
       <div className="bg-white rounded-lg border border-slate-200/70 p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="font-display font-semibold text-slate-900">Spend heatmap</h2>
-            <p className="text-xs text-slate-500 mt-0.5">12 months × 8 categories · darker = higher outflow</p>
+            <p className="text-xs text-slate-500 mt-0.5">{selectedFinancialYearLabel} · non-zero months and categories only · darker = higher outflow</p>
           </div>
+          <select value={selectedFinancialYear} onChange={(event) => setSelectedFinancialYear(Number(event.target.value))}
+            aria-label="Select heatmap financial year"
+            className="h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100">
+            {financialYears.map((year) => <option key={year} value={year}>{formatFinancialYear(year)}{year === currentFinancialYear ? ' · Current' : year === currentFinancialYear - 1 ? ' · Previous' : ''}</option>)}
+          </select>
         </div>
-        <div className="overflow-x-auto">
+        {visibleMonths.length && visibleCategories.length ? <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-separate border-spacing-1">
             <thead>
               <tr>
                 <th className="w-20" />
-                {CATS.map(c => {
+                {visibleCategories.map(({ index: ci }) => {
+                  const c = CATS[ci];
                   const Icon = typeIcon[c];
                   return (
                     <th key={c} className="text-[10px] font-medium text-slate-500 pb-1">
@@ -87,22 +124,28 @@ export function OverviewTab({ requests, history }: {
               </tr>
             </thead>
             <tbody>
-              {labels.map((m, mi) => (
+              {visibleMonths.map(({ index: mi }) => {
+                const m = labels[mi];
+                return (
                 <tr key={m}>
                   <td className="text-[11px] font-medium text-slate-600 pr-2 text-right tabular-nums">{m}</td>
-                  {h[mi].map((v, ci) => (
+                  {visibleCategories.map(({ index: ci }) => {
+                    const v = h[mi][ci];
+                    return (
                     <td key={ci}
-                      className={`h-8 rounded-sm text-center text-[10px] font-mono tabular-nums ${heatColor(v, maxCell)}`}
+                      className={`h-8 rounded-sm text-center text-[10px] font-mono tabular-nums ${v ? heatColor(v, maxCell) : "bg-transparent"}`}
                       title={`${typeLabels[CATS[ci]]} · ${m} · ${fmtINR(v)}`}>
                       {v > maxCell * 0.5 ? `${Math.round(v/1000)}k` : ""}
                     </td>
-                  ))}
+                    );
+                  })}
                   <td className="text-[11px] font-semibold text-slate-800 pl-2 tabular-nums text-right">{fmtINR(mt[mi])}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
-        </div>
+        </div> : <div className="grid min-h-32 place-items-center rounded-md border border-dashed border-slate-200 bg-slate-50/50 text-xs text-slate-500">No spend recorded in {selectedFinancialYearLabel} yet.</div>}
       </div>
 
       {/* Category mix */}

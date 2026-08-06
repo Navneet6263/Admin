@@ -56,6 +56,12 @@ export async function request<T>(path: string, init: { method?: string; body?: u
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && authenticate) {
+    session.clear();
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.location.assign('/');
+    }
+  }
   if (!response.ok) throw new Error(data.error || 'Request failed');
   return data as T;
 }

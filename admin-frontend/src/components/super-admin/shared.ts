@@ -31,10 +31,51 @@ export const heatColor = (v: number, maxCell: number) => {
   return "bg-indigo-600 text-white";
 };
 
-export function buildHistory(requests: RequestItem[]) {
-  const dates = Array.from({ length: 12 }, (_, offset) =>
-    new Date(new Date().getFullYear(), new Date().getMonth() - 11 + offset, 1));
-  const labels = dates.map(d => d.toLocaleString("en-IN", { month: "short" }));
+export const financialYearStartFor = (date: Date) => date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+export const financialYearLabel = (startYear: number) => `FY ${startYear}–${String(startYear + 1).slice(-2)}`;
+export const availableFinancialYears = (requests: RequestItem[]) => {
+  const current = financialYearStartFor(new Date());
+  const years = new Set<number>(Array.from({ length: 5 }, (_, index) => current - index));
+  requests.forEach((row) => {
+    const date = new Date(row.createdAt);
+    if (!Number.isNaN(date.getTime())) years.add(financialYearStartFor(date));
+  });
+  return [...years].sort((a, b) => b - a);
+};
+
+export interface SpendHeatmapRow { month_index: number; type: RequestType; total_spend: number; }
+export interface CompanySpendRow { company: string; request_count: number; total_spend: number; }
+export interface SpendHeatmapResponse {
+  fy_start: number; center_code: string; heatmap: SpendHeatmapRow[]; companies: CompanySpendRow[];
+}
+
+const financialYearShape = (financialYearStart: number) => {
+  const now = new Date();
+  const currentFinancialYear = financialYearStartFor(now);
+  const monthCount = financialYearStart === currentFinancialYear
+    ? ((now.getFullYear() - financialYearStart) * 12 + now.getMonth() - 3) + 1
+    : 12;
+  const dates = Array.from({ length: monthCount }, (_, offset) => new Date(financialYearStart, 3 + offset, 1));
+  return { dates, labels: dates.map(date => date.toLocaleString("en-IN", { month: "short" })) };
+};
+
+const finishHistory = (labels: string[], values: number[][], financialYearStart: number) => {
+  const totals = values.map(row => row.reduce((sum,value) => sum+value, 0));
+  const categoryTotals = CATS.map((_, index) => values.reduce((sum, row) => sum + row[index], 0));
+  const recent = totals.slice(-6);
+  const average = recent.length ? recent.reduce((sum,value) => sum+value, 0) / recent.length : 0;
+  const slope = recent.length > 1 ? ((recent.at(-1) ?? 0) - recent[0]) / (recent.length - 1) : 0;
+  return {
+    MONTHS: labels, heat: values, monthTotals: totals, catTotals: categoryTotals,
+    financialYearLabel: financialYearLabel(financialYearStart), grandTotal: totals.reduce((sum,value) => sum+value, 0),
+    thisMonth: totals.at(-1) ?? 0, lastMonth: totals.at(-2) ?? 0,
+    forecast: [1,2,3].map(step => Math.max(0, Math.round(average + slope * (2.5 + step)))), avg6: average,
+  };
+};
+
+export function buildHistory(requests: RequestItem[], selectedFinancialYear?: number) {
+  const financialYearStart = selectedFinancialYear ?? financialYearStartFor(new Date());
+  const { dates, labels } = financialYearShape(financialYearStart);
   const values = dates.map(() => CATS.map(() => 0));
   requests.forEach(row => {
     const d = new Date(row.createdAt);
@@ -42,19 +83,18 @@ export function buildHistory(requests: RequestItem[]) {
     const cat = CATS.indexOf(row.type);
     if (month >= 0 && cat >= 0 && row.status !== "rejected") values[month][cat] += row.amount ?? 0;
   });
-  const totals = values.map(row => row.reduce((s,v) => s+v, 0));
-  const categoryTotals = CATS.map((_, index) => values.reduce((sum, row) => sum + row[index], 0));
-  const average = totals.slice(-6).reduce((s,v) => s+v, 0) / 6;
-  const sl = (totals.at(-1)! - totals.at(-6)!) / 5;
-  return {
-    MONTHS: labels, heat: values, monthTotals: totals,
-    catTotals: categoryTotals,
-    grandTotal: totals.reduce((s,v) => s+v, 0),
-    thisMonth: totals.at(-1) ?? 0,
-    lastMonth: totals.at(-2) ?? 0,
-    forecast: [1,2,3].map(step => Math.max(0, Math.round(average + sl * (2.5 + step)))),
-    avg6: average,
-  };
+  return finishHistory(labels, values, financialYearStart);
+}
+
+export function buildHistoryFromAggregates(rows: SpendHeatmapRow[], financialYearStart: number) {
+  const { dates, labels } = financialYearShape(financialYearStart);
+  const values = dates.map(() => CATS.map(() => 0));
+  rows.forEach((row) => {
+    const category = CATS.indexOf(row.type);
+    if (row.month_index >= 0 && row.month_index < values.length && category >= 0)
+      values[row.month_index][category] = Number(row.total_spend || 0);
+  });
+  return finishHistory(labels, values, financialYearStart);
 }
 
 // Re-export fmtINR for convenience

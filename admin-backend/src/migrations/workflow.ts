@@ -71,6 +71,9 @@ const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_routing')
     CREATE INDEX IX_requests_routing ON requests(approval_center_code,workflow_status,created_at DESC)
       INCLUDE(user_id,type,amount,charge_center_code,payment_status)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_spend_period')
+    CREATE INDEX IX_requests_spend_period ON requests(created_at,charge_center_code)
+      INCLUDE(type,company,status,amount,actual_amount)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_assignments_queue')
     CREATE INDEX IX_assignments_queue ON request_assignments(role,center_code,is_active,can_act) INCLUDE(request_id,user_id)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_payments_status_due')

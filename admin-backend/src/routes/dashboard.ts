@@ -156,4 +156,42 @@ router.get('/activity-feed', async (_req: Request, res: Response) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Activity feed failed' }); }
 });
 
+// Exact FY aggregates; avoids request-list pagination truncating older months.
+router.get('/spend-heatmap', async (req: Request, res: Response) => {
+  const now = new Date();
+  const currentFy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyStart = Number(req.query.fy_start ?? currentFy);
+  const center = typeof req.query.center_code === 'string' && req.query.center_code ? req.query.center_code : 'all';
+  if (!Number.isInteger(fyStart) || fyStart < 2000 || fyStart > currentFy) {
+    return res.status(400).json({ error: 'Invalid financial year' });
+  }
+  try {
+    const result = await pool.request()
+      .input('fy', mssql.Int, fyStart)
+      .input('center', mssql.NVarChar(10), center)
+      .query(`
+        DECLARE @start DATE=DATEFROMPARTS(@fy,4,1), @end DATE=DATEFROMPARTS(@fy+1,4,1);
+        SELECT DATEDIFF(MONTH,@start,DATEFROMPARTS(YEAR(r.created_at),MONTH(r.created_at),1)) month_index,
+          r.type,SUM(COALESCE(r.actual_amount,r.amount,0)) total_spend
+        FROM requests r
+        WHERE r.created_at>=@start AND r.created_at<@end AND r.status<>'rejected'
+          AND (@center='all' OR r.charge_center_code=@center)
+        GROUP BY DATEDIFF(MONTH,@start,DATEFROMPARTS(YEAR(r.created_at),MONTH(r.created_at),1)),r.type
+        ORDER BY month_index,r.type;
+
+        SELECT r.company,COUNT_BIG(*) request_count,
+          SUM(COALESCE(r.actual_amount,r.amount,0)) total_spend
+        FROM requests r
+        WHERE r.created_at>=@start AND r.created_at<@end AND r.status<>'rejected'
+          AND (@center='all' OR r.charge_center_code=@center)
+        GROUP BY r.company ORDER BY total_spend DESC;
+      `);
+    const recordsets = result.recordsets as unknown as Array<Array<Record<string, unknown>>>;
+    res.json({ fy_start: fyStart, center_code: center, heatmap: recordsets[0] ?? [], companies: recordsets[1] ?? [] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Spend heatmap query failed' });
+  }
+});
+
 export default router;

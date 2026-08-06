@@ -171,3 +171,23 @@
 .request-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgb(30 41 59 / 75%);
 }
+
+/* Consistent interaction affordance across native and custom controls. */
+a[href],
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="option"],
+select:not(:disabled),
+summary,
+label[for],
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}

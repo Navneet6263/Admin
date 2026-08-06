@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { PaymentCard, type PaymentRow } from "@/components/payments/PaymentCard";
-import { request, session, type Paged } from "@/lib/api";
+import { request, type Paged } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
 import { CheckCircle2, Clock3, Landmark } from "lucide-react";
 
 export const Route = createFileRoute("/finance")({
@@ -15,19 +16,21 @@ function FinanceConsole() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const user = session.user;
+  const [requestedId, setRequestedId] = useState("");
+  const user = useSessionUser();
+  useEffect(() => { setRequestedId(new URLSearchParams(window.location.search).get("request") || ""); }, []);
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const result = await request<Paged<PaymentRow>>(
-        `/api/payments?status=${status}&page=${page}&page_size=25`,
+        `/api/payments?status=${status}&page=${page}&page_size=25${requestedId ? `&request_id=${encodeURIComponent(requestedId)}` : ""}`,
       );
       setRows(result.data);
       setTotal(result.total);
     } finally {
       setLoading(false);
     }
-  }, [page, status]);
+  }, [page, requestedId, status]);
   useEffect(() => {
     void load();
   }, [load]);

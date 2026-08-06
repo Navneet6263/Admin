@@ -4,7 +4,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { RequestRow } from "@/components/RequestRow";
 import { RequestDetail } from "@/components/RequestDetail";
 import { priorityRank, typeLabels, type RequestItem, type RequestStatus, type RequestType, type Priority } from "@/components/models";
-import { getRequests, request, session } from "@/lib/api";
+import { getRequests, request } from "@/lib/api";
+import { useSessionUser } from "@/lib/useSessionUser";
 import { useCompanies } from "@/lib/directory";
 import { ShieldCheck, Inbox, CheckCircle2, Undo2, Filter, ChevronDown } from "lucide-react";
 
@@ -28,9 +29,8 @@ const autoNote = (actor: string, action: "verify" | "send_back", userNote: strin
 };
 
 function VerifierConsole() {
-  const [sessionUser, setSessionUser] = useState(session.user);
+  const sessionUser = useSessionUser();
   const companies = useCompanies();
-  useEffect(() => { void session.me().then(setSessionUser); }, []);
   const actor = sessionUser ? `${sessionUser.name} (USR-${sessionUser.id})` : "Authenticated verifier";
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [tab, setTab] = useState<Tab>("queue");

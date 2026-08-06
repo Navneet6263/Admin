@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache } from '../db';
-import { hashPassword, Role } from '../auth';
+import { effectiveRole, hashPassword, Role } from '../auth';
 
 const router = Router();
 
@@ -33,7 +33,11 @@ router.post('/', async (req: Request, res: Response) => {
     'employee', 'admin', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
   ];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid user role' });
-  if ((role === 'center_admin' || role === 'hq_admin') && !String(center_code || '').trim()) {
+  const actorRole = effectiveRole(req.user!.role);
+  if (actorRole === 'hq_admin' && ['admin', 'hq_admin', 'super_admin'].includes(role)) {
+    return res.status(403).json({ error: 'Only Super Admin can create HQ or Super Admin accounts' });
+  }
+  if ((role === 'center_admin' || role === 'employee') && !String(center_code || '').trim()) {
     return res.status(400).json({ error: 'center_code is required for this admin role' });
   }
 
@@ -73,6 +77,13 @@ router.post('/:id/assign-center', async (req: Request, res: Response) => {
   const tx = pool.transaction();
   try {
     await tx.begin();
+    const target = await tx.request().input('uid', mssql.Int, userId)
+      .query(`SELECT role FROM users WHERE id=@uid`);
+    if (!target.recordset[0]) { await tx.rollback(); return res.status(404).json({ error: 'User not found' }); }
+    if (['hq_admin','admin','super_admin'].includes(target.recordset[0].role)) {
+      await tx.rollback();
+      return res.status(400).json({ error: 'HQ and Super Admin use global center access' });
+    }
 
     // Update denormalized column on users
     await tx.request()

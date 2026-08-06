@@ -100,4 +100,14 @@ export async function completeApproval(
     kind: "request_status",
     actionUrl: "/employee",
   });
+  if (request.payment_status !== "not_required") {
+    await notify({
+      userId: actorId,
+      message: `${request.ref_id} approved. Please enter the final cost to complete expense tracking.`,
+      kind: "payment_update",
+      actionUrl: `/finance?request=${requestId}`,
+      dueAt: due,
+      dedupeKey: `payment-update:${requestId}:${actorId}`,
+    });
+  }
 }

@@ -1,8 +1,11 @@
 // Specialized sub-forms for the New Request dialog.
 // Each form owns its own local UI + returns a `details` payload the admin can review.
 
-import { Train, Plane, Car, Package, Utensils } from "lucide-react";
+import { Train, Plane, Car, Package, Utensils, Download, CheckCircle2 } from "lucide-react";
 import { fmtINR } from "./requestMeta";
+import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
+import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
+import { businessCardTemplate, type BusinessCardBrand, type BusinessCardDetails } from "./business-card/businessCardTemplates";
 
 /* ---------- shared field helpers ---------- */
 const inputCls =
@@ -35,85 +38,121 @@ export function SelectField({
 }
 
 /* ---------- Visiting card — templates + live preview ---------- */
-export const VC_TEMPLATES = [
-  { id: "classic",  name: "Classic",   accent: "#0f172a", surface: "#ffffff", body: "#475569" },
-  { id: "royal",    name: "Royal",     accent: "#7c1d1d", surface: "#fdfaf5", body: "#6b7280" },
-  { id: "minimal",  name: "Minimal",   accent: "#111111", surface: "#f8fafc", body: "#334155" },
-] as const;
-export type VCTemplateId = typeof VC_TEMPLATES[number]["id"];
+export type VCState = BusinessCardDetails;
+export const emptyVC = (): VCState => ({ brand: "vision_india", name: "", designation: "", phone: "", email: "", address: "", qty: 100, confirmed: false });
+export const vcValid = (v: VCState) => v.name.trim().length > 1 && v.designation.trim().length > 1 && v.phone.trim().length >= 7 && v.email.includes("@") && Boolean(v.confirmed);
 
 export function VisitingCardForm({ value, onChange }: { value: VCState; onChange: (v: VCState) => void }) {
-  const tpl = VC_TEMPLATES.find((t) => t.id === value.template) ?? VC_TEMPLATES[0];
-  const set = <K extends keyof VCState>(k: K, v: VCState[K]) => onChange({ ...value, [k]: v });
+  const set = <K extends keyof VCState>(key: K, next: VCState[K]) => onChange({ ...value, [key]: next });
   return (
     <div className="space-y-4">
-      <div>
-        <label className={labelCls}>Template</label>
-        <div className="grid grid-cols-3 gap-2">
-          {VC_TEMPLATES.map((t) => (
-            <button key={t.id} type="button" onClick={() => set("template", t.id)}
-              className={`p-2 border rounded-lg text-left transition-all ${value.template === t.id ? "border-indigo-400/60 bg-indigo-500/15 ring-2 ring-indigo-400/20" : "border-white/15 bg-slate-900/30 hover:bg-slate-800/50 hover:border-white/25"}`}>
-              <div className="h-12 rounded flex flex-col justify-center px-2" style={{ background: t.surface, borderTop: `3px solid ${t.accent}` }}>
-                <div className="text-[9px] font-semibold" style={{ color: t.accent }}>YOUR NAME</div>
-                <div className="text-[7px]" style={{ color: t.body }}>Designation</div>
-              </div>
-              <p className="text-[10px] font-semibold text-slate-300 mt-1.5">{t.name}</p>
+      <div className="rounded-2xl border border-indigo-400/25 bg-indigo-500/10 p-3.5">
+        <label className={labelCls}>Which company card do you need?</label>
+        <div className="grid grid-cols-2 gap-2">
+          {(["vision_india", "talent_foundation", "green_call", "green_hr"] as BusinessCardBrand[]).map((brand) => (
+            <button key={brand} type="button" onClick={() => set("brand", brand)}
+              className={`rounded-xl border px-3 py-3 text-left transition-colors ${value.brand === brand ? "border-indigo-300 bg-indigo-400/20 text-white ring-2 ring-indigo-300/20" : "border-white/15 bg-slate-900/30 text-slate-300 hover:bg-slate-800/60"}`}>
+              <span className="block text-[9px] font-bold uppercase tracking-widest text-slate-400">Official template</span>
+              <span className="mt-1 block text-sm font-semibold">{businessCardTemplate(brand).name}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Full name" value={value.name} onChange={(v) => set("name", v)} placeholder="e.g. Priya Sharma" />
-        <TextField label="Designation" value={value.designation} onChange={(v) => set("designation", v)} placeholder="Senior Account Executive" />
-        <TextField label="Phone" value={value.phone} onChange={(v) => set("phone", v)} placeholder="+91 98xxxxxx" />
-        <TextField label="Email" value={value.email} onChange={(v) => set("email", v)} placeholder="priya@company.com" />
-        <div className="col-span-2">
-          <TextField label="Address (optional)" value={value.address} onChange={(v) => set("address", v)} placeholder="Company address line" />
-        </div>
+        <TextField label="Full name" value={value.name} onChange={(next) => set("name", next)} placeholder="e.g. Priya Sharma" />
+        <TextField label="Designation" value={value.designation} onChange={(next) => set("designation", next)} placeholder="Senior Account Executive" />
+        <TextField label="Phone" value={value.phone} onChange={(next) => set("phone", next)} placeholder="+91 98xxxxxx" />
+        <TextField label="Email" type="email" value={value.email} onChange={(next) => set("email", next)} placeholder="priya@company.com" />
+        <div className="col-span-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-400">Company address and branding are locked in the selected official template.</div>
         <div>
           <label className={labelCls}>Quantity</label>
-          <select value={value.qty} onChange={(e) => set("qty", Number(e.target.value))} className={inputCls}>
-            {[100, 250, 500, 1000].map((n) => <option key={n} value={n}>{n} cards</option>)}
+          <select value={value.qty} onChange={(event) => set("qty", Number(event.target.value))} className={inputCls}>
+            {[100, 250, 500, 1000].map((quantity) => <option key={quantity} value={quantity}>{quantity} cards</option>)}
           </select>
         </div>
       </div>
 
-      <div>
-        <label className={labelCls}>Live preview</label>
-        <div className="rounded-xl border border-white/10 bg-slate-900/35 p-5">
-          <div className="mx-auto max-w-sm rounded-lg shadow-md overflow-hidden" style={{ background: tpl.surface }}>
-            <div style={{ height: 4, background: tpl.accent }} />
-            <div className="p-5">
-              <p className="font-display text-lg font-semibold tracking-wide" style={{ color: tpl.accent }}>
-                {value.name || "Your Name"}
-              </p>
-              <p className="text-[11px] tracking-widest uppercase mt-0.5" style={{ color: tpl.body }}>
-                {value.designation || "Designation"}
-              </p>
-              <div className="h-px my-3" style={{ background: tpl.accent, opacity: 0.15 }} />
-              <div className="text-[11px] leading-relaxed" style={{ color: tpl.body }}>
-                <p>{value.phone || "+91 —"}</p>
-                <p>{value.email || "you@company.com"}</p>
-                {value.address && <p className="mt-1">{value.address}</p>}
-              </div>
-            </div>
-          </div>
+      <div className="rounded-xl border border-white/10 bg-slate-900/35 p-4">
+        <BusinessCardPreview details={value} />
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+          <button type="button" onClick={() => void downloadBusinessCardPdf(value)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
+            <Download className="h-3.5 w-3.5" /> Download PDF preview
+          </button>
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={Boolean(value.confirmed)} onChange={(event) => set("confirmed", event.target.checked)} className="h-4 w-4 accent-indigo-500" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> I verified all card details
+          </label>
         </div>
       </div>
     </div>
   );
 }
 
-export interface VCState {
-  template: VCTemplateId;
-  name: string; designation: string; phone: string; email: string; address: string;
-  qty: number;
-}
-export const emptyVC = (): VCState => ({ template: "classic", name: "", designation: "", phone: "", email: "", address: "", qty: 250 });
-export const vcValid = (v: VCState) => v.name.trim().length > 1 && v.designation.trim().length > 1 && v.phone.trim().length >= 7;
-
 /* ---------- Travel — train / flight / taxi ---------- */
+/* ---------- ID card — profile-driven request ---------- */
+export interface IdCardState {
+  issueType: "new" | "lost" | "damaged" | "details_changed" | "expired";
+  reason: string;
+}
+export interface RequesterProfile {
+  name: string;
+  email: string;
+  company: string;
+  dept: string;
+  center_code?: string | null;
+}
+export const emptyIdCard = (): IdCardState => ({ issueType: "new", reason: "" });
+export const idCardValid = (value: IdCardState) => value.reason.trim().length >= 5;
+
+const ID_CARD_REASONS: Array<{ id: IdCardState["issueType"]; label: string; hint: string }> = [
+  { id: "new", label: "New / first card", hint: "New joining or first ID card" },
+  { id: "lost", label: "Lost card", hint: "Card was lost and needs replacement" },
+  { id: "damaged", label: "Damaged card", hint: "Card is broken or unreadable" },
+  { id: "details_changed", label: "Details changed", hint: "Name, role or office details changed" },
+  { id: "expired", label: "Expired card", hint: "Renew an expired ID card" },
+];
+
+export function IdCardForm({ value, onChange, profile }: { value: IdCardState; onChange: (value: IdCardState) => void; profile?: RequesterProfile }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3.5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Employee profile · automatic</p>
+        <p className="mt-1 text-sm font-semibold text-white">{profile?.name || "Authenticated employee"}</p>
+        <p className="mt-1 text-xs text-slate-300">{profile?.company || "Company from profile"} · {profile?.dept || "Department"}</p>
+        <p className="mt-0.5 text-[10px] text-slate-400">{profile?.email || "Work email"} · Center {profile?.center_code || "Unassigned"}</p>
+      </div>
+
+      <div>
+        <label className={labelCls}>Why do you need an ID card?</label>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {ID_CARD_REASONS.map((reason) => (
+            <button key={reason.id} type="button" onClick={() => onChange({ ...value, issueType: reason.id })}
+              className={`rounded-xl border p-3 text-left transition-colors ${value.issueType === reason.id ? "border-indigo-300 bg-indigo-400/20 text-white ring-2 ring-indigo-300/20" : "border-white/15 bg-slate-900/30 text-slate-300 hover:bg-slate-800/60"}`}>
+              <span className="block text-xs font-semibold">{reason.label}</span>
+              <span className="mt-0.5 block text-[10px] text-slate-400">{reason.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Reason / explanation *</label>
+        <textarea value={value.reason} onChange={(event) => onChange({ ...value, reason: event.target.value })} rows={4}
+          placeholder={value.issueType === "lost" ? "Where and how was the card lost?" : "Briefly explain why a new ID card is required…"}
+          className={inputCls} maxLength={500} />
+        <p className="mt-1 text-[10px] text-slate-400">Name, company, department and center will be taken from your employee profile.</p>
+      </div>
+    </div>
+  );
+}
+
+export function summarizeIdCard(value: IdCardState) {
+  const label = ID_CARD_REASONS.find((reason) => reason.id === value.issueType)?.label || "ID card";
+  return { subject: `ID Card — ${label}`, description: value.reason.trim() };
+}
+
 export type TravelMode = "train" | "flight" | "taxi";
 export interface Pax { name: string; age: string; gender: "Male" | "Female" | "Other"; }
 export interface TravelState {
@@ -407,8 +446,8 @@ export function FoodingForm({ value, onChange }: { value: FoodingState; onChange
 /* ---------- helpers to derive subject/description/amount ---------- */
 export function summarizeVC(v: VCState) {
   return {
-    subject: `Visiting card — ${v.name}, ${v.qty} qty`,
-    description: `Visiting card print request for ${v.name} (${v.designation})`,
+    subject: `${businessCardTemplate(v.brand).name} visiting card — ${v.name}, ${v.qty} qty`,
+    description: `Print-ready visiting card request for ${v.name} (${v.designation}) using the locked ${businessCardTemplate(v.brand).name} template`,
   };
 }
 export function summarizeTravel(t: TravelState) {
@@ -447,9 +486,16 @@ export function detailRows(type: string, details: Record<string, unknown> | unde
   const d = details as Record<string, string | number | boolean | undefined | unknown>;
   const s = (v: unknown) => (v === undefined || v === null || v === "") ? "—" : String(v);
   switch (type) {
+    case "id_card":
+      return [
+        { label: "Issue type", value: s(ID_CARD_REASONS.find((reason) => reason.id === d.issueType)?.label ?? d.issueType) },
+        { label: "Reason", value: s(d.reason) },
+        { label: "Profile company", value: s(d.profileCompany) },
+        { label: "Profile center", value: s(d.profileCenter) },
+      ];
     case "visiting_card":
       return [
-        { label: "Template", value: s(VC_TEMPLATES.find(t => t.id === d.template)?.name ?? d.template) },
+        { label: "Company template", value: s(d.brand ? businessCardTemplate(d.brand as BusinessCardBrand).name : d.template) },
         { label: "Name", value: s(d.name) },
         { label: "Designation", value: s(d.designation) },
         { label: "Phone", value: s(d.phone) },
