@@ -51,7 +51,7 @@ app.get('/health', (_req, res) =>
   res.json({ status: dbConnected ? 'connected' : 'disconnected', uptime: process.uptime() })
 );
 
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 connectDB().then(() => {
   void createPaymentReminders().catch(console.error);

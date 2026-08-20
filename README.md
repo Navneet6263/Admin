@@ -2,6 +2,27 @@
 
 ## Quick Start
 
+### Environment (required before starting)
+
+Copy `admin-backend/.env.example` to `admin-backend/.env`, then fill these values:
+
+```env
+PORT=3001
+DB_SERVER=localhost
+DB_PORT=1433
+DB_INSTANCE=
+DB_NAME=admin_db
+DB_USER=sa
+DB_PASSWORD=your-sql-server-password
+DB_ENCRYPT=true
+DB_TRUST_SERVER_CERTIFICATE=true
+AUTH_SECRET=use-a-long-random-secret-here
+CORS_ORIGIN=http://localhost:5173,http://localhost:3000
+PAYMENT_REMINDER_MINUTES=240
+```
+
+For SQL Express, set `DB_INSTANCE=SQLEXPRESS` and leave `DB_PORT` blank. Copy `admin-frontend/.env.example` to `admin-frontend/.env`; it only needs `VITE_API_URL=http://localhost:3001` for local development. Do not commit either `.env` file.
+
 ### 1. Database
 Open SQL Server Management Studio → Run `database/setup.sql`
 Then run `database/center_migration.sql` and `database/role_hq_center_migration.sql` (for existing DBs).

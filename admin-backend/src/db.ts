@@ -6,15 +6,27 @@ dotenv.config();
 
 export let dbConnected = false;
 
+const envBoolean = (key: string, fallback: boolean) => {
+  const value = process.env[key]?.trim().toLowerCase();
+  return value === undefined || value === '' ? fallback : ['1', 'true', 'yes'].includes(value);
+};
+
+const configuredPort = Number(process.env.DB_PORT);
+
 export const pool = new mssql.ConnectionPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER!,
   database: process.env.DB_NAME,
+  ...(Number.isInteger(configuredPort) && configuredPort > 0 ? { port: configuredPort } : {}),
   connectionTimeout: 15_000,
   requestTimeout: 30_000,
   pool: { max: 10, min: 0, idleTimeoutMillis: 30_000 },
-  options: { encrypt: true, trustServerCertificate: true },
+  options: {
+    encrypt: envBoolean('DB_ENCRYPT', true),
+    trustServerCertificate: envBoolean('DB_TRUST_SERVER_CERTIFICATE', true),
+    ...(process.env.DB_INSTANCE ? { instanceName: process.env.DB_INSTANCE } : {}),
+  },
 });
 pool.on('error', (error) => {
   dbConnected = false;
