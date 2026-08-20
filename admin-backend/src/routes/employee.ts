@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import mssql from 'mssql';
-import { pool, getCached, setCache, clearCache, VALID_TYPES } from '../db';
-import { initializeWorkflow } from '../services/workflow';
+import { pool, getCached, setCache, clearCache, VALID_TYPES, withDbRetry } from '../db';
+import { createEmployeeRequest } from '../services/requestCreation';
+import { notifyWorkflowCreated } from '../services/workflow';
 
 const router = Router();
 
@@ -16,19 +18,20 @@ router.get('/requests/:userId', async (req: Request, res: Response) => {
   if (cached) return res.json(cached);
 
   try {
-    const result = await pool.request()
+    const result = await withDbRetry(() => pool.request()
       .input('user_id', mssql.Int, userId)
       .query(`
         SELECT
           r.id, r.ref_id, r.user_id, r.company, r.team, r.type, r.subject, r.description,
-          r.amount, r.priority, r.status, r.details,
+          CASE WHEN r.type='stationery' THEN NULL ELSE r.amount END amount,
+          r.priority, r.status, CASE WHEN r.type='stationery' THEN NULL ELSE r.details END details,
           u.name AS employeeName, u.dept AS employeeDept,
           r.created_at, r.updated_at
         FROM requests r
         LEFT JOIN users u ON r.user_id = u.id
         WHERE r.user_id = @user_id
         ORDER BY r.created_at DESC
-      `);
+      `));
     setCache(cacheKey, result.recordset);
     res.json(result.recordset);
   } catch (err) {
@@ -39,65 +42,36 @@ router.get('/requests/:userId', async (req: Request, res: Response) => {
 
 // ── POST /api/employee/requests ──────────────────────────────────────────────
 router.post('/requests', async (req: Request, res: Response) => {
-  const { type, subject, description = '', amount, priority = 'normal', details, request_center_code } = req.body;
+  const { type, subject, description = '', amount, priority = 'normal', details,
+    request_center_code, client_request_id } = req.body;
   const user_id = req.user!.id;
 
   if (!user_id || !type || !VALID_TYPES.includes(type))
     return res.status(400).json({ error: 'user_id and valid type are required' });
   if (!subject?.trim())
     return res.status(400).json({ error: 'subject is required' });
-
-  // Fetch user's company + team
-  let company = 'VT', team = '';
-  try {
-    const u = await pool.request()
-      .input('id', mssql.Int, user_id)
-      .query(`SELECT company, dept FROM users WHERE id = @id`);
-    if (!u.recordset[0]) return res.status(404).json({ error: 'User not found' });
-    company = u.recordset[0].company;
-    team    = u.recordset[0].dept;
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'User lookup failed' });
-  }
+  if (client_request_id && !/^[a-zA-Z0-9._-]{8,64}$/.test(String(client_request_id)))
+    return res.status(400).json({ error: 'Invalid submission key' });
 
   try {
-    const result = await pool.request()
-      .input('user_id',     mssql.Int,                user_id)
-      .input('company',     mssql.NVarChar(100),      company)
-      .input('team',        mssql.NVarChar(100),      team)
-      .input('type',        mssql.NVarChar(30),       type)
-      .input('subject',     mssql.NVarChar(mssql.MAX), subject.trim())
-      .input('description', mssql.NVarChar(mssql.MAX), description.trim())
-      .input('amount',      mssql.Decimal(14, 2),     amount != null && !isNaN(Number(amount)) ? Number(amount) : null)
-      .input('priority',    mssql.NVarChar(20),       priority)
-      .input('details',     mssql.NVarChar(mssql.MAX), details ? JSON.stringify(details) : null)
-      .query(`
-        INSERT INTO requests (user_id,company,team,type,subject,description,amount,priority,details)
-        OUTPUT inserted.id, inserted.ref_id, inserted.user_id, inserted.company, inserted.team, inserted.type, inserted.subject, inserted.description, inserted.amount, inserted.priority, inserted.status, inserted.details, inserted.created_at, inserted.updated_at
-        VALUES (@user_id,@company,@team,@type,@subject,@description,@amount,@priority,@details)
-      `);
-
-    const insertedRow = result.recordset[0];
-    if (insertedRow?.id) {
-      await initializeWorkflow(insertedRow.id, user_id, request_center_code, type, amount == null ? null : Number(amount));
-      try {
-        await pool.request()
-          .input('request_id', mssql.Int,           insertedRow.id)
-          .input('actor_id',   mssql.Int,           user_id)
-          .input('action',     mssql.NVarChar(30),  'raised')
-          .input('note',       mssql.NVarChar(200), 'Request raised by employee')
-          .query(`INSERT INTO approvals (request_id, actor_id, action, note) VALUES (@request_id, @actor_id, @action, @note)`);
-      } catch (auditErr) {
-        console.warn('Audit log insert warning:', auditErr);
-      }
-    }
-
+    const insertedRow = await createEmployeeRequest({ userId: user_id, type, subject,
+      description, amount: amount != null && !isNaN(Number(amount)) ? Number(amount) : null,
+      priority, details, requestCenter: request_center_code, clientRequestId: client_request_id || randomUUID() });
     clearCache(`employee:${user_id}:requests`, 'admin:stats', 'admin:requests:pending');
-    res.status(201).json(insertedRow);
+    res.status(insertedRow.deduplicated ? 200 : 201).json(insertedRow);
+    if (!insertedRow.deduplicated) void notifyWorkflowCreated({ ref: insertedRow.ref_id,
+      homeCenter: insertedRow.homeCenter, requestCenter: insertedRow.requestCenter,
+      approvalRole: insertedRow.approvalRole, approvalUserId: insertedRow.approvalUserId, category: type,
+    }).catch((error) => console.error('Request notification error:', error));
   } catch (err) {
     console.error('Request creation error:', err);
-    res.status(500).json({ error: 'Creation failed' });
+    const message = err instanceof Error ? err.message : '';
+    const expected = ['User not found or inactive', 'Employee has no home center assigned', 'Invalid request center',
+      'Stationery items are required', 'Valid stationery items are required', 'Select a valid food booking date and time',
+      'Food service time must be between 10:00 AM and 8:00 PM', 'Today food booking is available from 10:00 AM to 8:00 PM']
+      .concat('Complete the Vision India ID-card preview before submitting')
+      .find((item) => message.includes(item));
+    res.status(expected ? 400 : 500).json({ error: expected || 'Creation failed' });
   }
 });
 

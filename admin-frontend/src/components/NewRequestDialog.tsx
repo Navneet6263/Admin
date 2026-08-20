@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { X, Minus, Plus, AlertTriangle, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X, Minus, Plus, Sparkles, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
 import { typeLabels, type Priority, type RequestType, type StationeryPick } from "./models";
-import { typeIcon, fmtINR } from "./requestMeta";
-import { useInventory, isLow } from "./liveInventory";
+import { typeIcon } from "./requestMeta";
+import { useInventory } from "./liveInventory";
 import { CenterCombobox } from "./CenterCombobox";
 import {
-  IdCardForm, emptyIdCard, idCardValid, summarizeIdCard, type IdCardState, type RequesterProfile,
+  IdCardForm, emptyIdCard, idCardValid, idCardDetails, summarizeIdCard, type IdCardState, type RequesterProfile,
   VisitingCardForm, emptyVC, vcValid, summarizeVC, type VCState,
   TravelForm, emptyTravel, travelValid, summarizeTravel, type TravelState,
   CourierForm, emptyCourier, courierValid, summarizeCourier, type CourierState,
@@ -34,7 +34,8 @@ interface Props {
     amount: number | null; priority: Priority;
     items?: StationeryPick[]; details?: Record<string, unknown>;
     request_center_code: string;
-  }) => void;
+    client_request_id: string;
+  }) => Promise<void>;
 }
 
 const priorities: Priority[] = ["low", "normal", "high", "urgent"];
@@ -49,6 +50,10 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
   const [picks, setPicks] = useState<Record<string, number>>({});
   const [stationeryQuery, setStationeryQuery] = useState("");
   const [requestCenter, setRequestCenter] = useState(homeCenter);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const submitLock = useRef(false);
+  const submissionKey = useRef("");
 
   const [idCard, setIdCard] = useState<IdCardState>(emptyIdCard());
   const [vc, setVc] = useState<VCState>(emptyVC());
@@ -62,6 +67,8 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
       setType(initialType ?? "id_card");
       setSubject(""); setDescription(""); setAmount(""); setPriority("normal");
       setPicks({}); setStationeryQuery("");
+      setSubmitting(false); setSubmitError(""); submitLock.current = false;
+      submissionKey.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
       setRequestCenter(homeCenter || centers[0]?.code || "");
       setIdCard(emptyIdCard()); setVc(emptyVC()); setTravel(emptyTravel()); setCourier(emptyCourier());
       setMeeting(emptyMeeting()); setFooding(emptyFooding());
@@ -110,31 +117,33 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
     });
 
   const canSubmit =
-    isID ? idCardValid(idCard) : isVC ? vcValid(vc) : isTravel ? travelValid(travel) : isCourier ? courierValid(courier) :
+    isID ? idCardValid(idCard, employeeProfile) : isVC ? vcValid(vc) : isTravel ? travelValid(travel) : isCourier ? courierValid(courier) :
     isMeeting ? meetingValid(meeting) : isFooding ? foodingValid(fooding) :
     isStationery ? pickedList.length > 0 : subject.trim().length > 3 && description.trim().length > 5;
 
-  const submit = () => {
-    if (!canSubmit) return;
-    const emit = (draft: Omit<Parameters<Props["onSubmit"]>[0], "request_center_code">) => onSubmit({ ...draft, request_center_code: requestCenter });
+  const submit = async () => {
+    if (!canSubmit || submitLock.current) return;
+    submitLock.current = true; setSubmitting(true); setSubmitError("");
+    const base = { type, priority, client_request_id: submissionKey.current, request_center_code: requestCenter };
+    let draft: Parameters<Props["onSubmit"]>[0];
     if (isID) {
-      const { subject: s, description: d } = summarizeIdCard(idCard);
-      emit({ type, subject: s, description: d, amount: null, priority, details: {
-        ...idCard, profileCompany: employeeProfile?.company, profileCenter: employeeProfile?.center_code,
-        profileName: employeeProfile?.name, profileEmail: employeeProfile?.email,
-      } }); return;
+      const summary = summarizeIdCard(idCard);
+      draft = { ...base, ...summary, amount: null, details: { ...idCardDetails(idCard, employeeProfile),
+        issueType: idCard.issueType, reason: idCard.reason, profileCompany: employeeProfile?.company,
+        profileCenter: employeeProfile?.center_code, profileEmail: employeeProfile?.email } };
+    } else if (isVC) draft = { ...base, ...summarizeVC(vc), amount: null, details: vc as unknown as Record<string, unknown> };
+    else if (isTravel) draft = { ...base, ...summarizeTravel(travel), amount: null, details: travel as unknown as Record<string, unknown> };
+    else if (isCourier) draft = { ...base, ...summarizeCourier(courier), amount: courier.declaredValue ? Number(courier.declaredValue) : null, details: courier as unknown as Record<string, unknown> };
+    else if (isMeeting) draft = { ...base, ...summarizeMeeting(meeting), amount: null, details: meeting as unknown as Record<string, unknown> };
+    else if (isFooding) { const summary = summarizeFooding(fooding); draft = { ...base, subject: summary.subject, description: summary.description, amount: summary.amount || null, details: fooding as unknown as Record<string, unknown> }; }
+    else if (isStationery) draft = { ...base, subject: subject.trim() || `Stationery order — ${pickedList.length} items`,
+      description: pickedList.map(p => `• ${p.name} (${p.sku}) × ${p.qty}`).join("\n") + (description ? `\n\nNote: ${description}` : ""), amount: stationeryTotal, items: pickedList };
+    else draft = { ...base, subject: subject.trim(), description: description.trim(), amount: amount ? Number(amount) : null };
+    try { await onSubmit(draft); }
+    catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Request could not be submitted. Please retry.");
+      submitLock.current = false; setSubmitting(false);
     }
-    if (isVC) { const { subject: s, description: d } = summarizeVC(vc); emit({ type, subject: s, description: d, amount: null, priority, details: vc as unknown as Record<string, unknown> }); return; }
-    if (isTravel) { const { subject: s, description: d } = summarizeTravel(travel); emit({ type, subject: s, description: d, amount: null, priority, details: travel as unknown as Record<string, unknown> }); return; }
-    if (isCourier) { const { subject: s, description: d } = summarizeCourier(courier); emit({ type, subject: s, description: d, amount: courier.declaredValue ? Number(courier.declaredValue) : null, priority, details: courier as unknown as Record<string, unknown> }); return; }
-    if (isMeeting) { const { subject: s, description: d } = summarizeMeeting(meeting); emit({ type, subject: s, description: d, amount: null, priority, details: meeting as unknown as Record<string, unknown> }); return; }
-    if (isFooding) { const { subject: s, description: d, amount: est } = summarizeFooding(fooding); emit({ type, subject: s, description: d, amount: est || null, priority, details: fooding as unknown as Record<string, unknown> }); return; }
-    if (isStationery) {
-      const s = subject.trim() || `Stationery order — ${pickedList.length} items (${fmtINR(stationeryTotal)})`;
-      const d = pickedList.map(p => `• ${p.name} (${p.sku}) × ${p.qty}`).join("\n") + (description ? `\n\nNote: ${description}` : "");
-      emit({ type, subject: s, description: d, amount: stationeryTotal, priority, items: pickedList }); return;
-    }
-    emit({ type, subject: subject.trim(), description: description.trim(), amount: amount ? Number(amount) : null, priority });
   };
 
   const titleText =
@@ -161,11 +170,11 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
   return (
     <>
       {/* Blurred backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => { if (!submitting) onClose(); }} />
 
       {/* Full-width drawer panel — photo fills entire background */}
       <div
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-5xl overflow-hidden animate-in slide-in-from-right duration-300"
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-6xl overflow-hidden animate-in slide-in-from-right duration-300"
         onClick={e => e.stopPropagation()}
       >
         {/* ── Full-bleed AI Photo Background ── */}
@@ -177,7 +186,7 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
         {/* ── Close button — top right floating ── */}
-        <button onClick={onClose} aria-label="Close new request" className="absolute top-6 right-6 z-30 w-9 h-9 grid place-items-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all shadow-lg cursor-pointer">
+        <button onClick={onClose} disabled={submitting} aria-label="Close new request" className="absolute top-6 right-6 z-30 w-9 h-9 grid place-items-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
           <X className="w-4 h-4" />
         </button>
 
@@ -196,7 +205,7 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
         </div>
 
         {/* ── RIGHT: Floating Dark Glass Form Card ── */}
-        <div className="absolute inset-y-4 right-4 w-[430px] max-w-[calc(100%-2rem)] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-white/12 backdrop-blur-2xl">
+        <div className="absolute inset-y-4 right-4 w-[560px] max-w-[calc(100%-2rem)] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-white/12 backdrop-blur-2xl">
 
           {/* Card Header */}
           <div className="px-4 py-3 pr-14 border-b border-white/15 shrink-0">
@@ -256,32 +265,23 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
                     </div>
                     <div className="border border-white/10 rounded-xl max-h-44 overflow-y-auto divide-y divide-white/5 bg-black/20 backdrop-blur-sm">
                       {filteredInventory.map(i => {
-                        const picked = picks[i.sku] ?? 0; const low = isLow(i); const out = i.qty === 0;
+                        const picked = picks[i.sku] ?? 0;
                         return (
                           <div key={i.sku} className={`flex items-center gap-2.5 px-3 py-2 ${picked > 0 ? "bg-indigo-600/15" : ""}`}>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-white truncate">{i.name}</p>
-                              <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
-                                <span className="font-mono text-indigo-300 font-bold">{fmtINR(i.price)}</span>
-                                <span className={`${low ? "text-rose-400 font-bold" : ""}`}>
-                                  {low && <AlertTriangle className="w-2.5 h-2.5 inline mr-0.5" />}
-                                  {out ? "Out" : `${i.qty} left`}
-                                </span>
-                              </div>
+                              <p className="mt-0.5 text-[10px] text-slate-400">Select required quantity</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <button disabled={picked === 0} onClick={() => bump(i.sku, -1, i.qty)} className="w-6 h-6 grid place-items-center rounded-lg border border-white/15 bg-white/8 text-slate-300 hover:bg-white/15 disabled:opacity-30 cursor-pointer"><Minus className="w-3 h-3" /></button>
                               <span className="w-6 text-center text-xs font-mono font-bold text-white">{picked}</span>
-                              <button disabled={out || picked >= i.qty} onClick={() => bump(i.sku, +1, i.qty)} className="w-6 h-6 grid place-items-center rounded-lg border border-white/15 bg-white/8 text-slate-300 hover:bg-white/15 disabled:opacity-30 cursor-pointer"><Plus className="w-3 h-3" /></button>
+                              <button disabled={picked >= 99} onClick={() => bump(i.sku, +1, 99)} className="w-6 h-6 grid place-items-center rounded-lg border border-white/15 bg-white/8 text-slate-300 hover:bg-white/15 disabled:opacity-30 cursor-pointer"><Plus className="w-3 h-3" /></button>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{pickedList.length} items</span>
-                      <span className="font-mono font-bold text-indigo-300">Total {fmtINR(stationeryTotal)}</span>
-                    </div>
+                    <p className="mt-2 text-xs text-slate-400">{pickedList.length} items selected · availability will be verified by Admin</p>
                   </div>
                 ) : (
                   <div>
@@ -313,13 +313,14 @@ export function NewRequestDialog({ open, initialType, centers = [], homeCenter =
           {/* Card Footer */}
           <div className="px-5 py-4 border-t border-white/15 bg-white/5 shrink-0">
             <p className="text-[10px] text-white/40 mb-3">{isVC ? "You → Center Admin · HQ Admin · Super Admin" : "You → Center Admin → Super Admin"}</p>
+            {submitError && <p role="alert" className="mb-3 text-xs font-medium text-rose-300">{submitError}</p>}
             <div className="flex items-center gap-2">
-              <button onClick={onClose} className="flex-1 py-2.5 text-xs font-semibold text-white/60 hover:text-white border border-white/15 hover:border-white/30 rounded-xl transition-all bg-white/8 cursor-pointer">
+              <button onClick={onClose} disabled={submitting} className="flex-1 py-2.5 text-xs font-semibold text-white/60 hover:text-white border border-white/15 hover:border-white/30 rounded-xl transition-all bg-white/8 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                 Cancel
               </button>
-              <button onClick={submit} disabled={!canSubmit}
+              <button onClick={() => void submit()} disabled={!canSubmit || submitting}
                 className="flex-1 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/40 disabled:opacity-35 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer">
-                Submit <ArrowRight className="w-3.5 h-3.5" />
+                {submitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</> : <>Submit <ArrowRight className="w-3.5 h-3.5" /></>}
               </button>
             </div>
           </div>

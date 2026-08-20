@@ -1,4 +1,5 @@
 import mssql from "mssql";
+import { ensureInventoryCatalog } from "./inventoryCatalog";
 
 const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID('users') AND definition LIKE '%finance_head%') BEGIN
@@ -26,6 +27,8 @@ const statements = [
       payment_status NVARCHAR(30) NOT NULL CONSTRAINT DF_requests_payment DEFAULT 'not_required',
       actual_amount DECIMAL(14,2) NULL, payment_due_at DATETIME2 NULL;
   END`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('requests') AND name='client_request_id')
+    ALTER TABLE requests ADD client_request_id NVARCHAR(64) NULL`,
   `IF OBJECT_ID('approval_policies','U') IS NULL CREATE TABLE approval_policies (
     id INT IDENTITY PRIMARY KEY, role NVARCHAR(30) NOT NULL, user_id INT NULL REFERENCES users(id),
     center_code NVARCHAR(10) NULL REFERENCES centers(code), category NVARCHAR(30) NULL,
@@ -71,6 +74,9 @@ const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_routing')
     CREATE INDEX IX_requests_routing ON requests(approval_center_code,workflow_status,created_at DESC)
       INCLUDE(user_id,type,amount,charge_center_code,payment_status)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_requests_employee_submission')
+    CREATE UNIQUE INDEX UX_requests_employee_submission ON requests(user_id,client_request_id)
+      WHERE client_request_id IS NOT NULL`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_spend_period')
     CREATE INDEX IX_requests_spend_period ON requests(created_at,charge_center_code)
       INCLUDE(type,company,status,amount,actual_amount)`,
@@ -105,4 +111,5 @@ const statements = [
 
 export async function ensureWorkflowSchema(pool: mssql.ConnectionPool) {
   for (const sql of statements) await pool.request().query(sql);
+  await ensureInventoryCatalog(pool);
 }

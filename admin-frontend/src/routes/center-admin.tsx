@@ -6,7 +6,8 @@ import { useSessionUser } from "@/lib/useSessionUser";
 import { CenterBudgetRing } from "@/components/center-admin/CenterBudgetRing";
 import { CenterRequestCard, type CenterRequest } from "@/components/center-admin/CenterRequestCard";
 import { CenterStatsRow } from "@/components/center-admin/CenterStatsRow";
-import { CheckCircle2, XCircle, Inbox, IndianRupee, Building2 } from "lucide-react";
+import { InventoryPanel } from "@/components/InventoryPanel";
+import { CheckCircle2, XCircle, Inbox, IndianRupee, Building2, Package } from "lucide-react";
 
 export const Route = createFileRoute("/center-admin")({
   head: () => ({
@@ -34,11 +35,12 @@ function CenterAdminDashboard() {
   const [requests, setRequests] = useState<CenterRequest[]>([]);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
+  const [tab, setTab] = useState<"pending" | "approved" | "rejected" | "inventory">("pending");
   const [loading, setLoading] = useState(true);
   const user = useSessionUser();
 
   const fetchAll = useCallback(async () => {
+    if (tab === "inventory") { setLoading(false); return; }
     setLoading(true);
     try {
       const workflowStatus = tab === "pending" ? "awaiting_approval" : tab;
@@ -67,6 +69,7 @@ function CenterAdminDashboard() {
     { key: "pending" as const, label: "Inbox", icon: Inbox },
     { key: "approved" as const, label: "Approved", icon: CheckCircle2 },
     { key: "rejected" as const, label: "Rejected", icon: XCircle },
+    { key: "inventory" as const, label: "Inventory", icon: Package },
   ];
 
   return (
@@ -90,7 +93,7 @@ function CenterAdminDashboard() {
 
         {stats && <CenterStatsRow stats={stats} />}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: tab === "inventory" ? "1fr" : "1fr 300px", gap: 24, alignItems: "start" }}>
           <div>
             <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 4, marginBottom: 24 }}>
               {TABS.map(({ key, label, icon: Icon }) => (
@@ -105,6 +108,7 @@ function CenterAdminDashboard() {
               ))}
             </div>
 
+            {tab === "inventory" ? <div style={{ height: "calc(100vh - 245px)", minHeight: 560 }}><InventoryPanel /></div> :
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {loading ? (
                 <div style={{ textAlign: "center", color: "#64748b", padding: 60 }}>Loading…</div>
@@ -116,10 +120,10 @@ function CenterAdminDashboard() {
               ) : requests.map((r) => (
                 <CenterRequestCard key={r.id} req={r} onApprove={approve} onReject={reject} />
               ))}
-            </div>
+            </div>}
           </div>
 
-          {budget && (
+          {budget && tab !== "inventory" && (
             <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 28 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
                 <IndianRupee size={16} color="#fbbf24" />

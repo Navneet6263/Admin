@@ -81,6 +81,7 @@ export function toRequest(row: Record<string, unknown>): RequestItem {
     type: row.type as RequestItem['type'],
     subject: String(row.subject),
     amount: row.amount == null ? null : Number(row.amount),
+    actualAmount: row.actual_amount == null ? null : Number(row.actual_amount),
     description: String(row.description ?? ''),
     priority: row.priority as RequestItem['priority'],
     status: row.status as RequestItem['status'],

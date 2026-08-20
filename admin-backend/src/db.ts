@@ -4,16 +4,46 @@ import { ensureWorkflowSchema } from './migrations/workflow';
 
 dotenv.config();
 
+export let dbConnected = false;
+
 export const pool = new mssql.ConnectionPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER!,
   database: process.env.DB_NAME,
-  pool: { max: 30, min: 5, idleTimeoutMillis: 30_000 },
+  connectionTimeout: 15_000,
+  requestTimeout: 30_000,
+  pool: { max: 10, min: 0, idleTimeoutMillis: 30_000 },
   options: { encrypt: true, trustServerCertificate: true },
 });
+pool.on('error', (error) => {
+  dbConnected = false;
+  console.error('SQL pool error:', error instanceof Error ? error.message : error);
+});
 
-export let dbConnected = false;
+const transientDbError = (error: unknown) => {
+  const value = error as { code?: string; message?: string; originalError?: { code?: string; message?: string; info?: { code?: string } } };
+  const codes = [value?.code, value?.originalError?.code, value?.originalError?.info?.code];
+  const message = `${value?.message || ''} ${value?.originalError?.message || ''}`;
+  return codes.some((code) => ['ESOCKET', 'ECONNRESET', 'ECONNCLOSED', 'ETIMEOUT'].includes(String(code)))
+    || /ECONNRESET|connection lost|socket hang up|timeout/i.test(message);
+};
+
+export async function withDbRetry<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const result = await operation();
+      dbConnected = true;
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (!transientDbError(error) || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (2 ** attempt)));
+    }
+  }
+  throw lastError;
+}
 
 /** Runs once on server start — safe, idempotent DDL for center tables */
 async function runMigrations() {

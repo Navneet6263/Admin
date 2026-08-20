@@ -1,175 +1,47 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, Package, Pencil, Check, X, Plus, Search } from "lucide-react";
-import { inventoryStore, isLow, useInventory, type InventoryItem } from "./liveInventory";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Check, Package, Pencil, Plus, Search, Settings2, Trash2, X } from "lucide-react";
+import { INVENTORY_CATEGORIES, inventoryStore, isLow, useInventory, type InventoryItem } from "./liveInventory";
+import { DeleteInventoryDialog, InventoryItemDialog } from "./InventoryItemDialog";
 import { fmtINR } from "./requestMeta";
-
-const CATS: InventoryItem["category"][] = ["Writing", "Paper", "Printing", "Filing", "Desk", "Misc"];
+import { TablePagination } from "./TablePagination";
+import { InventoryCategorySummary } from "./InventoryCategorySummary";
 
 export function InventoryPanel() {
-  const items = useInventory();
-  const [query, setQuery] = useState("");
-  const [cat, setCat] = useState<InventoryItem["category"] | "all">("all");
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draftQty, setDraftQty] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items
-      .filter((i) => cat === "all" || i.category === cat)
-      .filter((i) => !q || i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q));
-  }, [items, query, cat]);
-
-  const lowCount = items.filter(isLow).length;
-  const totalValue = items.reduce((s, i) => s + i.qty * i.price, 0);
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden h-full">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Package className="w-4 h-4 text-slate-500" />
-          <p className="text-sm font-semibold text-slate-800">Stationery Inventory</p>
-        </div>
-        {lowCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-semibold rounded bg-rose-50 text-rose-700 border border-rose-100">
-            <AlertTriangle className="w-3 h-3" /> {lowCount} item{lowCount > 1 ? "s" : ""} low
-          </span>
-        )}
-        <span className="text-[11px] text-slate-500 ml-auto">Total value <span className="font-mono font-semibold text-slate-800">{fmtINR(totalValue)}</span></span>
-      </div>
-
-      <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search item or SKU…"
-            className="w-full pl-7 pr-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-2 focus:ring-slate-300" />
-        </div>
-        <select value={cat} onChange={(e) => setCat(e.target.value as InventoryItem["category"] | "all")}
-          className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-300">
-          <option value="all">All categories</option>
-          {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <button onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-white bg-slate-900 rounded hover:bg-black">
-          <Plus className="w-3 h-3" /> Add item
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider sticky top-0">
-            <tr>
-              <th className="text-left px-4 py-2 font-medium">SKU</th>
-              <th className="text-left px-4 py-2 font-medium">Item</th>
-              <th className="text-left px-4 py-2 font-medium">Category</th>
-              <th className="text-left px-4 py-2 font-medium">Unit</th>
-              <th className="text-right px-4 py-2 font-medium">Price</th>
-              <th className="text-right px-4 py-2 font-medium">On-hand</th>
-              <th className="text-right px-4 py-2 font-medium">Value</th>
-              <th className="text-right px-4 py-2 font-medium w-24"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.map((i) => {
-              const low = isLow(i);
-              const isEditing = editing === i.sku;
-              return (
-                <tr key={i.sku} className={low ? "bg-rose-50/40" : "hover:bg-slate-50/50"}>
-                  <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{i.sku}</td>
-                  <td className="px-4 py-2 text-slate-800 font-medium">{i.name}</td>
-                  <td className="px-4 py-2 text-slate-500">{i.category}</td>
-                  <td className="px-4 py-2 text-slate-500">{i.unit}</td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-700">{fmtINR(i.price)}</td>
-                  <td className="px-4 py-2 text-right">
-                    {isEditing ? (
-                      <input autoFocus value={draftQty} onChange={(e) => setDraftQty(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-16 text-right font-mono tabular-nums border border-slate-300 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-300" />
-                    ) : (
-                      <span className={`inline-flex items-center gap-1.5 font-mono tabular-nums font-semibold ${low ? "text-rose-700" : "text-slate-800"}`}>
-                        {low && <AlertTriangle className="w-3 h-3" />}
-                        {i.qty}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-600">{fmtINR(i.qty * i.price)}</td>
-                  <td className="px-4 py-2 text-right">
-                    {isEditing ? (
-                      <div className="inline-flex items-center gap-1">
-                        <button onClick={() => { inventoryStore.update(i.sku, { qty: Number(draftQty) || 0 }); setEditing(null); }}
-                          className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"><Check className="w-3 h-3" /></button>
-                        <button onClick={() => setEditing(null)} className="p-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"><X className="w-3 h-3" /></button>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setEditing(i.sku); setDraftQty(String(i.qty)); }}
-                        className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-900">
-                        <Pencil className="w-3 h-3" /> Restock
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} className="p-10 text-center text-sm text-slate-400">No items match your filter.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {addOpen && <AddItemDialog onClose={() => setAddOpen(false)} />}
+  const items = useInventory(); const [query, setQuery] = useState(""); const [category, setCategory] = useState("all");
+  const [editingQty, setEditingQty] = useState<string | null>(null); const [draftQty, setDraftQty] = useState("");
+  const [addOpen, setAddOpen] = useState(false); const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [deleteItem, setDeleteItem] = useState<InventoryItem | null>(null);
+  const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(15);
+  const filtered = useMemo(() => { const q = query.trim().toLowerCase(); return items
+    .filter((item) => category === "all" || item.category === category)
+    .filter((item) => !q || `${item.name} ${item.sku} ${item.category}`.toLowerCase().includes(q)); }, [items, query, category]);
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pagedItems = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
+  useEffect(() => setPage(1), [query, category, pageSize]);
+  useEffect(() => setPage((current) => Math.min(current, pages)), [pages]);
+  const lowCount = items.filter(isLow).length; const totalValue = items.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const saveQty = async (item: InventoryItem) => { await inventoryStore.update(item.sku, { qty: Number(draftQty) || 0 }); setEditingQty(null); };
+  return <div className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Package className="h-4 w-4 text-slate-500" /> Stationery Inventory</p>
+      {lowCount > 0 && <span className="inline-flex items-center gap-1.5 rounded border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3" /> {lowCount} low</span>}
+      <span className="ml-auto text-[11px] text-slate-500">Total value <b className="font-mono text-slate-800">{fmtINR(totalValue)}</b></span>
     </div>
-  );
-}
-
-function AddItemDialog({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [sku, setSku] = useState("");
-  const [category, setCategory] = useState<InventoryItem["category"]>("Misc");
-  const [unit, setUnit] = useState("");
-  const [price, setPrice] = useState("");
-  const [qty, setQty] = useState("");
-  const [threshold, setThreshold] = useState("10");
-
-  const canSave = name.trim() && sku.trim() && unit.trim() && Number(price) > 0 && Number(qty) >= 0;
-  const save = () => {
-    inventoryStore.add({
-      sku: sku.trim().toUpperCase(), name: name.trim(), category, unit: unit.trim(),
-      price: Number(price), qty: Number(qty), threshold: Number(threshold) || 10,
-    });
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-        <p className="font-display text-base font-semibold text-slate-900 mb-4">Add inventory item</p>
-        <div className="space-y-3">
-          <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} placeholder="e.g. Post-it flags (assorted)" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="SKU"><input value={sku} onChange={(e) => setSku(e.target.value.toUpperCase())} className={`${inputCls} font-mono`} placeholder="STA-PIF-01" /></Field>
-            <Field label="Category">
-              <select value={category} onChange={(e) => setCategory(e.target.value as InventoryItem["category"])} className={inputCls}>
-                {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Unit"><input value={unit} onChange={(e) => setUnit(e.target.value)} className={inputCls} placeholder="pack of 10" /></Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Price (₹)"><input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9]/g, ""))} className={`${inputCls} font-mono`} /></Field>
-            <Field label="On-hand"><input value={qty} onChange={(e) => setQty(e.target.value.replace(/[^0-9]/g, ""))} className={`${inputCls} font-mono`} /></Field>
-            <Field label="Low @"><input value={threshold} onChange={(e) => setThreshold(e.target.value.replace(/[^0-9]/g, ""))} className={`${inputCls} font-mono`} /></Field>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900">Cancel</button>
-          <button onClick={save} disabled={!canSave} className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded hover:bg-black disabled:opacity-40">Add</button>
-        </div>
-      </div>
+    <InventoryCategorySummary items={items} dense className="m-3 mb-0 shrink-0" />
+    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+      <div className="relative min-w-[200px] flex-1"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search item, category or SKU…" className="w-full rounded border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-slate-300" /></div>
+      <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"><option value="all">All categories</option>{INVENTORY_CATEGORIES.map((value) => <option key={value}>{value}</option>)}</select>
+      <button type="button" onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"><Plus className="h-3.5 w-3.5" /> Add item</button>
     </div>
-  );
-}
-
-const inputCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300";
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</p>{children}</div>;
+    <div className="flex-1 overflow-auto"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>
+      {['SKU','Item','Category','Unit','Price','On-hand','Value','Actions'].map((title) => <th key={title} className={`${['Price','On-hand','Value','Actions'].includes(title) ? 'text-right' : 'text-left'} px-4 py-2 font-medium`}>{title}</th>)}</tr></thead>
+      <tbody className="divide-y divide-slate-50">{pagedItems.map((item) => { const low = isLow(item); const editing = editingQty === item.sku; return <tr key={item.sku} className={low ? "bg-rose-50/40" : "hover:bg-slate-50/50"}>
+        <td className="px-4 py-2 font-mono text-[10px] text-slate-500">{item.sku}</td><td className="px-4 py-2 font-medium text-slate-800">{item.name}</td><td className="px-4 py-2 text-slate-500">{item.category}</td><td className="px-4 py-2 text-slate-500">{item.unit}</td>
+        <td className="px-4 py-2 text-right font-mono text-slate-700">{fmtINR(item.price)}</td><td className="px-4 py-2 text-right">{editing ? <input autoFocus value={draftQty} onChange={(event) => setDraftQty(event.target.value.replace(/[^0-9]/g, ""))} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 text-right font-mono" /> : <span className={`font-mono font-semibold ${low ? 'text-rose-700' : 'text-slate-800'}`}>{item.qty}</span>}</td>
+        <td className="px-4 py-2 text-right font-mono text-slate-600">{fmtINR(item.qty * item.price)}</td><td className="px-4 py-2 text-right">{editing ? <span className="inline-flex gap-1"><button type="button" onClick={() => void saveQty(item)} className="rounded bg-emerald-600 p-1 text-white"><Check className="h-3 w-3" /></button><button type="button" onClick={() => setEditingQty(null)} className="rounded bg-slate-200 p-1 text-slate-700"><X className="h-3 w-3" /></button></span> : <span className="inline-flex items-center gap-1">
+          <button type="button" title="Restock" onClick={() => { setEditingQty(item.sku); setDraftQty(String(item.qty)); }} className="rounded p-1 text-slate-500 hover:bg-slate-100"><Pencil className="h-3.5 w-3.5" /></button><button type="button" title="Edit item" onClick={() => setEditItem(item)} className="rounded p-1 text-indigo-600 hover:bg-indigo-50"><Settings2 className="h-3.5 w-3.5" /></button><button type="button" title="Remove item" onClick={() => setDeleteItem(item)} className="rounded p-1 text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button></span>}</td></tr>; })}
+        {filtered.length === 0 && <tr><td colSpan={8} className="p-10 text-center text-sm text-slate-400">No items match your filter.</td></tr>}</tbody></table></div>
+    <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />
+    {addOpen && <InventoryItemDialog onClose={() => setAddOpen(false)} />}{editItem && <InventoryItemDialog item={editItem} onClose={() => setEditItem(null)} />}{deleteItem && <DeleteInventoryDialog item={deleteItem} onClose={() => setDeleteItem(null)} />}
+  </div>;
 }

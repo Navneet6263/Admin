@@ -8,9 +8,10 @@ interface CentersAssignmentPanelProps {
   users: UserRow[];
   centers: CenterRow[];
   onLoad: () => void;
+  searchQuery?: string;
 }
 
-export function CentersAssignmentPanel({ users, centers, onLoad }: CentersAssignmentPanelProps) {
+export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "" }: CentersAssignmentPanelProps) {
   const companies = useCompanies();
   useEffect(() => { onLoad(); }, [onLoad]);
 
@@ -96,12 +97,10 @@ export function CentersAssignmentPanel({ users, centers, onLoad }: CentersAssign
     return counts;
   }, {}), [users]);
   const visibleCenters = useMemo(() => {
-    const query = centerQuery.trim().toLowerCase();
-    if (!query) return centers;
-    return centers.filter(center =>
-      `${center.code} ${center.name} ${center.city} ${center.company}`.toLowerCase().includes(query)
-    );
-  }, [centerQuery, centers]);
+    const queries = [centerQuery, searchQuery].map((value) => value.trim().toLowerCase()).filter(Boolean);
+    return centers.filter(center => queries.every((query) =>
+      `${center.code} ${center.name} ${center.city} ${center.company}`.toLowerCase().includes(query)));
+  }, [centerQuery, centers, searchQuery]);
 
   return (
     <div className="px-1 space-y-6">

@@ -3,6 +3,21 @@ import { useCompanies } from "@/lib/directory";
 import { typeLabels, type RequestType, type Priority } from "@/components/models";
 
 export type SortKey = "priority" | "newest" | "oldest" | "amount";
+export type AgeFilterKey = "today" | "older" | "all";
+
+export function AgeFilter({ value, onChange }: { value: AgeFilterKey; onChange: (v: AgeFilterKey) => void }) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={(e) => onChange(e.target.value as AgeFilterKey)}
+        className="appearance-none text-xs bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200 rounded pl-2.5 pr-7 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <option value="today">Today</option>
+        <option value="older">Older</option>
+        <option value="all">All dates</option>
+      </select>
+      <ChevronDown className="w-3 h-3 text-indigo-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+    </div>
+  );
+}
 
 export function TypeFilter({ value, onChange }: { value: RequestType | "all"; onChange: (v: RequestType | "all") => void }) {
   return (
@@ -55,7 +70,7 @@ export function CompanyFilter({ value, onChange }: { value: string; onChange: (v
       >
         <option value="all">All companies</option>
         {companies.map((c) => (
-          <option key={c.code} value={c.code}>{c.code} · {c.name}</option>
+          <option key={c.code} value={c.name}>{c.code} · {c.name}</option>
         ))}
       </select>
       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />

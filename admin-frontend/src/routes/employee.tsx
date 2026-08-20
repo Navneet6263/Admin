@@ -37,11 +37,14 @@ function EmployeeConsole() {
     try {
       const me = await request<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>('/api/auth/me');
       setCurrentUser(me);
-      const [mine, centerList] = await Promise.all([
+      const [mine, centerList] = await Promise.allSettled([
         getRequests(`/api/employee/requests/${me.id}`),
         request<Array<{ code: string; name: string; city: string }>>('/api/centers/public'),
       ]);
-      setRequests(mine); setCenters(centerList);
+      if (mine.status === "fulfilled") setRequests(mine.value);
+      else console.error("Unable to refresh employee requests", mine.reason);
+      if (centerList.status === "fulfilled") setCenters(centerList.value);
+      else console.error("Unable to refresh centers", centerList.reason);
     } catch (error) { console.error(error); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -87,18 +90,19 @@ function EmployeeConsole() {
     items?: import("@/components/models").StationeryPick[];
     details?: Record<string, unknown>;
     request_center_code: string;
+    client_request_id: string;
   }) => {
     const created = await request<{ id: number; ref_id: string }>('/api/employee/requests', {
       method: 'POST',
       body: { ...draft, details: { ...draft.details, items: draft.items } }
     });
-    await refresh();
     setTab("active");
     if (created?.ref_id) setSelectedId(created.ref_id);
     setSuccessToast(`Request ${created?.ref_id || 'submitted'} created and policy-routed successfully.`);
     setTimeout(() => setSuccessToast(null), 6000);
     setDialogOpen(false);
     setPrefillType(null);
+    void refresh();
   }, [refresh]);
 
   const cancelRequest = useCallback(async (reqItem: RequestItem) => {

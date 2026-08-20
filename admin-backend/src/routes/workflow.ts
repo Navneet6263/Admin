@@ -1,7 +1,7 @@
 import { Router } from "express";
 import mssql from "mssql";
 import { effectiveRole } from "../auth";
-import { pool } from "../db";
+import { pool, withDbRetry } from "../db";
 import { authorize } from "../services/policy";
 import { completeApproval } from "../services/approval";
 import { notify, notifyRole } from "../services/notifications";
@@ -24,7 +24,7 @@ router.get("/queue", async (req, res) => {
   const selectedCenter = typeof req.query.center_code === "string" && req.query.center_code !== "all"
     && (role === "hq_admin" || role === "super_admin") ? req.query.center_code : null;
   try {
-    const db = await pool
+    const db = await withDbRetry(() => pool
       .request()
       .input("uid", mssql.Int, user.id)
       .input("role", mssql.NVarChar(30), role)
@@ -33,18 +33,22 @@ router.get("/queue", async (req, res) => {
       .input("status", mssql.NVarChar(30), status)
       .input("offset", mssql.Int, offset)
       .input("limit", mssql.Int, pageSize).query(`
-        WITH visible AS (SELECT DISTINCT r.id,r.ref_id,r.user_id,r.type,r.subject,r.description,r.amount,r.priority,r.status,
+        WITH visible AS (SELECT r.id,r.ref_id,r.user_id,r.company,r.team,r.type,r.subject,r.description,r.amount,r.priority,r.status,r.details,
           r.workflow_status,r.payment_status,r.home_center_code,r.request_center_code,r.approval_center_code,
           r.charge_center_code,r.inventory_center_code,r.created_at,r.updated_at,u.name employeeName,u.dept employeeDept,
           a.assignment_type,CASE WHEN a.role=@role OR (@role='hq_admin' AND a.role='admin') THEN a.can_act ELSE 0 END can_act
           FROM requests r JOIN users u ON u.id=r.user_id
-          JOIN request_assignments a ON a.request_id=r.id AND a.is_active=1
+          OUTER APPLY (SELECT TOP 1 ra.id,ra.role,ra.assignment_type,ra.can_act FROM request_assignments ra
+            WHERE ra.request_id=r.id AND ra.is_active=1 AND (@role IN('super_admin','hq_admin') OR
+              (ra.role=@role AND (ra.user_id IS NULL OR ra.user_id=@uid)
+                AND (@cc IS NULL OR ra.center_code=@cc OR @role IN('hq_admin','finance','finance_head'))))
+            ORDER BY CASE WHEN ra.role=@role OR (@role='hq_admin' AND ra.role='admin') THEN 0 ELSE 1 END,
+              ra.can_act DESC,ra.id DESC) a
           WHERE (@status='all' OR r.workflow_status=@status)
           AND (@selectedCenter IS NULL OR r.approval_center_code=@selectedCenter) AND
-          (@role IN('super_admin','hq_admin') OR (a.role=@role AND (a.user_id IS NULL OR a.user_id=@uid)
-            AND (@cc IS NULL OR a.center_code=@cc OR @role IN('hq_admin','finance','finance_head')))))
+          (@role IN('super_admin','hq_admin') OR a.id IS NOT NULL))
         SELECT *,COUNT(*) OVER() total_count FROM visible ORDER BY created_at DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`));
     res.json({
       data: db.recordset,
       page,

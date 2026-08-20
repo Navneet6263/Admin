@@ -43,7 +43,7 @@ async function renderSide(image: HTMLImageElement, side: CardSide, details: Busi
   return { bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height };
 }
 
-function makePdf(images: Array<{ bytes: Uint8Array; width: number; height: number }>) {
+export function makePdf(images: Array<{ bytes: Uint8Array; width: number; height: number }>) {
   const objectCount = 2 + images.length * 3;
   const objects = new Map<number, Uint8Array>();
   const pageRefs = images.map((_, index) => `${3 + index * 3} 0 R`).join(" ");

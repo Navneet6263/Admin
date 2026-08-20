@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users, TrendingUp, Repeat, Crown, ChevronRight, ArrowUpRight, AlertCircle, Search, X,
 } from "lucide-react";
@@ -10,6 +10,8 @@ interface EmployeeStat {
   id: number;
   name: string;
   dept: string;
+  company: string;
+  center: string;
   approvedSpend: number;
   pendingSpend: number;
   rejectedSpend: number;
@@ -20,12 +22,14 @@ interface EmployeeStat {
   byCategory: Record<RequestType, number>;
 }
 
-function buildEmployeeStats(requests: RequestItem[]): EmployeeStat[] {
+function buildEmployeeStats(requests: RequestItem[], financialYearStart: number): EmployeeStat[] {
   const map = new Map<number, EmployeeStat>();
-  for (const r of requests) {
+  const start = new Date(financialYearStart, 3, 1); const end = new Date(financialYearStart + 1, 3, 1);
+  for (const r of requests.filter((row) => { const date = new Date(row.createdAt); return date >= start && date < end; })) {
     if (!map.has(r.employeeId)) {
       map.set(r.employeeId, {
-        id: r.employeeId, name: r.employeeName, dept: r.employeeDept,
+        id: r.employeeId, name: r.employeeName, dept: r.employeeDept, company: r.company,
+        center: r.homeCenter || r.chargeCenter || r.approvalCenter || "Unassigned",
         approvedSpend: 0, pendingSpend: 0, rejectedSpend: 0,
         reqCount: 0, approvedCount: 0, rejectedCount: 0, pendingCount: 0,
         byCategory: {} as Record<RequestType, number>,
@@ -33,11 +37,10 @@ function buildEmployeeStats(requests: RequestItem[]): EmployeeStat[] {
     }
     const s = map.get(r.employeeId)!;
     s.reqCount++;
-    const amt = r.amount || 0;
-    if (r.status === "approved") { s.approvedSpend += amt; s.approvedCount++; }
+    const amt = r.actualAmount ?? r.amount ?? 0;
+    if (r.status === "approved") { s.approvedSpend += amt; s.approvedCount++; s.byCategory[r.type] = (s.byCategory[r.type] || 0) + amt; }
     else if (r.status === "rejected") { s.rejectedSpend += amt; s.rejectedCount++; }
     else { s.pendingSpend += amt; s.pendingCount++; }
-    s.byCategory[r.type] = (s.byCategory[r.type] || 0) + amt;
   }
   return Array.from(map.values()).sort((a, b) => b.approvedSpend - a.approvedSpend);
 }
@@ -58,8 +61,10 @@ const deptTone = (d: string) => {
   return map[d] ?? "bg-slate-100 text-slate-700";
 };
 
-export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
-  const stats = useMemo(() => buildEmployeeStats(requests), [requests]);
+const currentFinancialYear = () => { const now = new Date(); return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1; };
+export function PeopleInsights({ requests, financialYearStart = currentFinancialYear() }: { requests: RequestItem[]; financialYearStart?: number }) {
+  const stats = useMemo(() => buildEmployeeStats(requests, financialYearStart), [financialYearStart, requests]);
+  const periodLabel = `FY ${financialYearStart}–${String(financialYearStart + 1).slice(-2)}${financialYearStart === currentFinancialYear() ? " YTD" : ""}`;
   const [openId, setOpenId] = useState<number | null>(stats[0]?.id ?? null);
   const [employeeQuery, setEmployeeQuery] = useState("");
   const filteredStats = useMemo(() => {
@@ -72,6 +77,7 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
     );
   }, [employeeQuery, stats]);
   const open = stats.find(s => s.id === openId) ?? null;
+  useEffect(() => { if (stats.length && !stats.some((row) => row.id === openId)) setOpenId(stats[0].id); }, [openId, stats]);
 
   const maxApproved = Math.max(...stats.map(s => s.approvedSpend), 1);
   const topSpender = stats[0];
@@ -117,7 +123,7 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
           label="Big-ticket buyer"
           primary={bigTicket?.name ?? "—"}
           secondary={fmtINR(bigTicket?.approvedSpend ?? 0)}
-          hint="Highest approved outflow YTD"
+          hint={`Highest approved outflow · ${periodLabel}`}
         />
       </div>
 
@@ -128,7 +134,7 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-display font-semibold text-slate-900 text-sm">Spend leaderboard</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">Click a row to drill down · approved outflow YTD</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Click a row to drill down · final paid amount where available · {periodLabel}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-slate-500">
                 <Users className="w-3 h-3" />
@@ -178,7 +184,8 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
                       <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-slate-800 to-slate-500 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500 tabular-nums">
+                      <div className="mt-1 flex items-center gap-3 overflow-hidden text-[10px] text-slate-500 tabular-nums">
+                        <span className="max-w-44 truncate" title={`${s.company} · ${s.center}`}>{s.company} · {s.center}</span>
                         <span>{s.reqCount} req</span>
                         <span className="text-emerald-600">✓ {s.approvedCount}</span>
                         {s.rejectedCount > 0 && <span className="text-rose-600">✗ {s.rejectedCount}</span>}
@@ -208,7 +215,7 @@ export function PeopleInsights({ requests }: { requests: RequestItem[] }) {
           {!open ? (
             <p className="text-xs text-slate-500">Select an employee to inspect.</p>
           ) : (
-            <EmployeePassport s={open} />
+            <EmployeePassport s={open} periodLabel={periodLabel} />
           )}
         </div>
       </div>
@@ -243,7 +250,7 @@ function SignalCard({
   );
 }
 
-function EmployeePassport({ s }: { s: EmployeeStat }) {
+function EmployeePassport({ s, periodLabel }: { s: EmployeeStat; periodLabel: string }) {
   const cats = Object.entries(s.byCategory)
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1]) as [RequestType, number][];
@@ -273,7 +280,7 @@ function EmployeePassport({ s }: { s: EmployeeStat }) {
 
       {/* Approved outflow highlight */}
       <div className="border border-slate-200/70 rounded-md p-3 bg-slate-50/50">
-        <p className="text-[10px] uppercase tracking-widest text-slate-500">Approved outflow YTD</p>
+          <p className="text-[10px] uppercase tracking-widest text-slate-500">Approved outflow · {periodLabel}</p>
         <p className="font-display text-xl font-semibold text-slate-900 mt-1 tabular-nums">{fmtINR(s.approvedSpend)}</p>
         {s.pendingSpend > 0 && (
           <p className="text-[10px] text-amber-700 mt-0.5">+ {fmtINR(s.pendingSpend)} pending review</p>

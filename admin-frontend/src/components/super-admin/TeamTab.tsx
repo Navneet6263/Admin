@@ -6,6 +6,7 @@ import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
 
 interface TeamTabProps {
   mode?: 'super' | 'hq';
+  searchQuery?: string;
 }
 
 interface UserRow {
@@ -14,7 +15,7 @@ interface UserRow {
   is_active: boolean; created_at: string;
 }
 
-export function TeamTab({ mode = 'super' }: TeamTabProps) {
+export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
   const userApiBase = mode === 'hq' ? '/api/admin/users' : '/api/super-admin/users';
   const isSuperAdmin = mode === 'super';
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -140,11 +141,11 @@ export function TeamTab({ mode = 'super' }: TeamTabProps) {
     departments: [...new Set(users.map((user) => user.dept).filter(Boolean))].sort(),
   }), [centers, users]);
   const filteredUsers = useMemo(() => {
-    const query = userQuery.trim().toLowerCase();
+    const queries = [userQuery, searchQuery].map((value) => value.trim().toLowerCase()).filter(Boolean);
     return users.filter((user) => {
-      const matchesSearch = !query || [user.name, user.email, user.dept, user.company,
-        user.center_code ?? '', user.center_name ?? '', String(user.id)]
-        .some((value) => value.toLowerCase().includes(query));
+      const values = [user.name, user.email, user.role, user.dept, user.company,
+        user.center_code ?? '', user.center_name ?? '', String(user.id)].map((value) => value.toLowerCase());
+      const matchesSearch = queries.every((query) => values.some((value) => value.includes(query)));
       return matchesSearch
         && (roleFilter === 'all' || user.role === roleFilter)
         && (centerFilter === 'all' || (centerFilter === 'unassigned' ? !user.center_code : user.center_code === centerFilter))
@@ -152,7 +153,7 @@ export function TeamTab({ mode = 'super' }: TeamTabProps) {
         && (deptFilter === 'all' || user.dept === deptFilter)
         && (statusFilter === 'all' || (statusFilter === 'active') === Boolean(user.is_active));
     });
-  }, [centerFilter, companyFilter, deptFilter, roleFilter, statusFilter, userQuery, users]);
+  }, [centerFilter, companyFilter, deptFilter, roleFilter, searchQuery, statusFilter, userQuery, users]);
   const filtersActive = Boolean(userQuery) || [roleFilter, centerFilter, companyFilter, deptFilter, statusFilter].some((value) => value !== 'all');
   const resetFilters = () => {
     setUserQuery(''); setRoleFilter('all'); setCenterFilter('all');

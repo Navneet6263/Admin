@@ -6,7 +6,7 @@ export interface AuditEntry { at: string; actor: string; action: 'created' | 'ra
 export interface StationeryPick { sku: string; name: string; qty: number; price: number; }
 export interface RequestItem {
   id: string; dbId?: number; employeeId: number; employeeName: string; employeeDept: string;
-  company: string; team: string; type: RequestType; subject: string; amount: number | null;
+  company: string; team: string; type: RequestType; subject: string; amount: number | null; actualAmount?: number | null;
   description: string; priority: Priority; status: RequestStatus; createdAt: string; updatedAt: string;
   audit: AuditEntry[]; items?: StationeryPick[]; details?: Record<string, unknown>;
   homeCenter?: string; requestCenter?: string; approvalCenter?: string; chargeCenter?: string;

@@ -4,11 +4,12 @@ import {
   TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock, AlertTriangle,
   Download, ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus, KeyRound
 } from "lucide-react";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import { DashboardLayout, type SearchSuggestion } from "@/components/DashboardLayout";
 import { CenterCombobox } from "@/components/CenterCombobox";
 import { type RequestItem, type RequestStatus } from "@/components/models";
 import { getRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
+import { useInventory } from "@/components/liveInventory";
 
 import { autoNote, buildHistory, fmtINR, type Tab, type UserRow, type CenterRow } from "@/components/super-admin/shared";
 import { StatChip } from "@/components/super-admin/widgets";
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/super-admin")({
 
 function SuperAdmin() {
   const sessionUser = useSessionUser();
+  const inventory = useInventory();
   const [authenticated, setAuthenticated] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [requests, setRequests] = useState<RequestItem[]>([]);
@@ -66,6 +68,22 @@ function SuperAdmin() {
   useEffect(() => { if (authenticated) void refresh(); }, [authenticated, refresh]);
   useEffect(() => { if (authenticated) void loadCentersData(); }, [authenticated, loadCentersData]);
 
+  const searchedRequests = useMemo(() => { const query = centerSearch.trim().toLowerCase(); if (!query) return requests;
+    return requests.filter((item) => [item.id, item.subject, item.description, item.employeeName, item.employeeDept,
+      item.company, item.team, item.type, item.status, item.homeCenter, item.requestCenter, item.approvalCenter]
+      .some((value) => String(value ?? "").toLowerCase().includes(query))); }, [centerSearch, requests]);
+  const searchSuggestions = useMemo<SearchSuggestion[]>(() => {
+    const query = centerSearch.trim().toLowerCase(); if (!query) return [];
+    if (tab === "inventory") return inventory.filter((item) => `${item.sku} ${item.name} ${item.category} ${item.unit}`.toLowerCase().includes(query))
+      .slice(0, 8).map((item) => ({ id: `inventory-${item.sku}`, label: `${item.sku} · ${item.name}`, meta: `${item.category} · ${item.qty} ${item.unit}`, value: item.sku }));
+    if (tab === "team") return centerUsers.filter((user) => `${user.id} ${user.name} ${user.email} ${user.role} ${user.dept} ${user.company} ${user.center_code ?? ""}`.toLowerCase().includes(query))
+      .slice(0, 8).map((user) => ({ id: `user-${user.id}`, label: user.name, meta: `${user.email} · ${user.role} · ${user.center_code || "Global access"}`, value: user.email }));
+    if (tab === "centers") return centers.filter((center) => `${center.code} ${center.name} ${center.city} ${center.company}`.toLowerCase().includes(query))
+      .slice(0, 8).map((center) => ({ id: `center-${center.code}`, label: `${center.code} · ${center.name}`, meta: `${center.city} · ${center.company}`, value: center.code }));
+    return requests.filter((item) => [item.id, item.subject, item.employeeName, item.employeeDept, item.company, item.type,
+      item.homeCenter, item.requestCenter].some((value) => String(value ?? "").toLowerCase().includes(query)))
+      .slice(0, 8).map((item) => ({ id: `request-${item.id}`, label: `${item.id} · ${item.subject}`, meta: `${item.employeeName} · ${item.company} · ${item.status}`, value: item.id }));
+  }, [centerSearch, centerUsers, centers, inventory, requests, tab]);
   const history = useMemo(() => buildHistory(requests), [requests]);
   const actor = sessionUser ? `${sessionUser.name} (USR-${sessionUser.id})` : "Authenticated Super Admin";
   const monthDelta = history.lastMonth > 0
@@ -83,11 +101,11 @@ function SuperAdmin() {
     return { approved, rejected, avgTat, rate, total: requests.length };
   }, [requests]);
 
-  const overrideList = useMemo(() => requests
+  const overrideList = useMemo(() => searchedRequests
     .filter(r => companyFilter === "all" || r.company === companyFilter)
     .filter(r => statusFilter === "all" || r.status === statusFilter)
     .sort((a,b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
-    [requests, companyFilter, statusFilter]);
+    [searchedRequests, companyFilter, statusFilter]);
 
   const selected = requests.find(r => r.id === selectedId) ?? overrideList[0];
 
@@ -128,7 +146,12 @@ function SuperAdmin() {
   ];
 
   return (
-    <DashboardLayout workspace="Executive Console" role={sessionUser?.dept || "Super Admin"} currentUser={sessionUser?.name ?? ""} searchQuery={centerSearch} onSearchChange={setCenterSearch}>
+    <DashboardLayout workspace="Executive Console" role={sessionUser?.dept || "Super Admin"} currentUser={sessionUser?.name ?? ""}
+      searchQuery={centerSearch} onSearchChange={setCenterSearch}
+      searchSuggestions={searchSuggestions}
+      searchPlaceholder={tab === "team" ? "Search employee, role, email or department…" : tab === "centers" ? "Search center, city, company or code…" : tab === "inventory" ? "Search inventory item, SKU or category…" : "Search requests, employees or IDs…"}
+      headerActions={<><CenterCombobox centers={centers} value={scopeCenter} onChange={setScopeCenter}
+        placeholder="All centers · filter scope…" className="w-56" />{scopeCenter && <button type="button" onClick={() => setScopeCenter("")} className="whitespace-nowrap text-[10px] font-semibold text-indigo-600 hover:text-indigo-800">Clear center</button>}</>}>
       <div className="px-4 sm:px-6 pt-6 pb-4">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
@@ -145,12 +168,6 @@ function SuperAdmin() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              {scopeCenter && <button type="button" onClick={() => setScopeCenter("")}
-                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800">All Centers</button>}
-              <CenterCombobox centers={centers} value={scopeCenter} onChange={setScopeCenter}
-                placeholder="All centers · filter scope…" className="w-64" />
-            </div>
             <StatChip icon={Wallet} label="Rolling 12M spend" value={fmtINR(history.grandTotal)} />
             <StatChip icon={monthDelta >= 0 ? TrendingUp : TrendingDown} label="This month"
               value={fmtINR(history.thisMonth)} sub={`${monthDelta>=0?"▲":"▼"} ${Math.abs(monthDelta).toFixed(1)}%`}
@@ -168,7 +185,7 @@ function SuperAdmin() {
               return (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => { setTab(t.id); setCenterSearch(""); }}
                   className={`relative flex h-11 shrink-0 items-center gap-1.5 px-3 text-xs font-medium leading-none whitespace-nowrap transition-colors duration-150 ${
                     isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
                   }`}
@@ -192,9 +209,9 @@ function SuperAdmin() {
       </div>
 
       <div className="px-4 sm:px-6 pb-10">
-        {tab === "overview" && <OverviewTab requests={requests} centerCode={scopeCenter} />}
-        {tab === "analytics" && <AnalyticsTab requests={requests} history={history} centerCode={scopeCenter} />}
-        {tab === "inventory" && <InventoryTab />}
+        {tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}
+        {tab === "analytics" && <AnalyticsTab requests={searchedRequests} history={buildHistory(searchedRequests)} centerCode={scopeCenter} />}
+        {tab === "inventory" && <InventoryTab searchQuery={centerSearch} />}
         {tab === "override" && (
           <OverrideTab
             list={overrideList} selected={selected}
@@ -203,13 +220,14 @@ function SuperAdmin() {
             onSelect={setSelectedId} onAction={onDetailAction}
           />
         )}
-        {tab === "anomalies" && <AnomaliesTab requests={requests} />}
-        {tab === "team" && <TeamTab />}
+        {tab === "anomalies" && <AnomaliesTab requests={searchedRequests} />}
+        {tab === "team" && <TeamTab searchQuery={centerSearch} />}
         {tab === "policies" && <PolicyTab />}
         {tab === "centers" && (
           <CentersAssignmentPanel
             users={centerUsers} centers={centers}
             onLoad={loadCentersData}
+            searchQuery={centerSearch}
           />
         )}
       </div>

@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { inventoryStore, useInventory, isLow } from "@/components/liveInventory";
 import { priorityRank, type RequestItem, type RequestStatus, type RequestType, type Priority } from "@/components/models";
-import { KpiTile, type SortKey } from "@/components/hq-admin/AdminFilters";
+import { KpiTile, type SortKey, type AgeFilterKey } from "@/components/hq-admin/AdminFilters";
 import { HqQueuePanel } from "@/components/hq-admin/HqQueuePanel";
 import { HqAnalyticsPanel } from "@/components/hq-admin/HqAnalyticsPanel";
 import { ExpenseAnalytics } from "@/components/analytics/ExpenseAnalytics";
@@ -52,6 +52,7 @@ function HqAdminConsole() {
   const [typeFilter, setTypeFilter] = useState<RequestType | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
   const [companyFilter, setCompanyFilter] = useState("all");
+  const [ageFilter, setAgeFilter] = useState<AgeFilterKey>("today");
   const [sortBy, setSortBy] = useState<SortKey>("priority");
   const [query, setQuery] = useState("");
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -68,6 +69,8 @@ function HqAdminConsole() {
   useEffect(() => {
     void refresh();
     void request<CenterOption[]>("/api/centers").then(setCenters).catch(console.error);
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   const counts = useMemo(() => ({
@@ -84,10 +87,12 @@ function HqAdminConsole() {
       tab === "inbox" ? (r.status === "pending" || r.status === "info_requested") :
       r.status === (tab as RequestStatus);
     const q = query.trim().toLowerCase();
+    const today = new Date().toDateString();
     return requests.filter(byTab)
       .filter((r) => typeFilter === "all" || r.type === typeFilter)
       .filter((r) => priorityFilter === "all" || r.priority === priorityFilter)
       .filter((r) => companyFilter === "all" || r.company === companyFilter)
+      .filter((r) => ageFilter === "all" || (new Date(r.createdAt).toDateString() === today) === (ageFilter === "today"))
       .filter((r) => !q || r.id.toLowerCase().includes(q) || r.subject.toLowerCase().includes(q) || r.employeeName.toLowerCase().includes(q))
       .sort((a, b) => {
         if (sortBy === "newest") return +new Date(b.updatedAt) - +new Date(a.updatedAt);
@@ -95,7 +100,7 @@ function HqAdminConsole() {
         if (sortBy === "amount") return (b.amount ?? 0) - (a.amount ?? 0);
         return priorityRank[a.priority] - priorityRank[b.priority] || +new Date(b.updatedAt) - +new Date(a.updatedAt);
       });
-  }, [requests, tab, typeFilter, priorityFilter, companyFilter, sortBy, query]);
+  }, [requests, tab, typeFilter, priorityFilter, companyFilter, ageFilter, sortBy, query]);
 
   const selected = requests.find((r) => r.id === selectedId) ?? filtered[0];
 
@@ -250,10 +255,10 @@ function HqAdminConsole() {
       ) : (
         <HqQueuePanel
           filtered={filtered} selected={selected} checked={checked}
-          typeFilter={typeFilter} priorityFilter={priorityFilter} companyFilter={companyFilter}
+          typeFilter={typeFilter} priorityFilter={priorityFilter} companyFilter={companyFilter} ageFilter={ageFilter}
           sortBy={sortBy} query={query}
           onTypeFilter={setTypeFilter} onPriorityFilter={setPriorityFilter}
-          onCompanyFilter={setCompanyFilter} onSortBy={setSortBy} onQuery={setQuery}
+          onCompanyFilter={setCompanyFilter} onAgeFilter={setAgeFilter} onSortBy={setSortBy} onQuery={setQuery}
           onToggleAll={() => {
             const actionableIds = filtered.filter((r) => r.canAct).map((r) => r.id);
             setChecked(checked.size === actionableIds.length ? new Set() : new Set(actionableIds));

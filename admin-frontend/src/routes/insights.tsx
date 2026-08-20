@@ -254,7 +254,7 @@ function Insights() {
         </div>
 
         {/* People analytics — smart per-employee drill-down */}
-        <PeopleInsights requests={requests} />
+        <PeopleInsights requests={requests} financialYearStart={selectedFinancialYear} />
 
         <AnomaliesTab requests={requests} />
       </div>

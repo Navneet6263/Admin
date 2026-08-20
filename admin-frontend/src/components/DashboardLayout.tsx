@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { LogOut, Search, Command, X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -10,6 +10,7 @@ export interface WorkspaceTab {
   icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   badge?: number | string;
 }
+export interface SearchSuggestion { id: string; label: string; meta?: string; value?: string; }
 
 interface Props {
   children: ReactNode;
@@ -20,17 +21,20 @@ interface Props {
   activeTab?: string;
   onTabChange?: (key: string) => void;
   rightSlot?: ReactNode;             // per-workspace actions (e.g. "New request")
+  headerActions?: ReactNode;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   searchPlaceholder?: string;
+  searchSuggestions?: SearchSuggestion[];
 }
 
 export function DashboardLayout({
   children, currentUser, role = "Administrator",
-  workspace, tabs = [], activeTab, onTabChange, rightSlot,
-  searchQuery = "", onSearchChange, searchPlaceholder = "Search requests, employees, IDs…",
+  workspace, tabs = [], activeTab, onTabChange, rightSlot, headerActions,
+  searchQuery = "", onSearchChange, searchPlaceholder = "Search requests, employees, IDs…", searchSuggestions = [],
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false); const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const initials = currentUser.split(" ").map((n) => n[0]).join("").slice(0, 2);
 
   // Keyboard shortcut Ctrl+K / Cmd+K to focus search input
@@ -44,6 +48,7 @@ export function DashboardLayout({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+  useEffect(() => setActiveSuggestion(-1), [searchQuery]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 flex flex-col">
@@ -66,6 +71,14 @@ export function DashboardLayout({
               ref={searchInputRef}
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown" && searchSuggestions.length) { event.preventDefault(); setSearchOpen(true); setActiveSuggestion((value) => Math.min(value + 1, searchSuggestions.length - 1)); }
+                else if (event.key === "ArrowUp" && searchSuggestions.length) { event.preventDefault(); setActiveSuggestion((value) => Math.max(value - 1, 0)); }
+                else if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); const suggestion = searchSuggestions[activeSuggestion]; onSearchChange?.(suggestion.value ?? suggestion.label); setSearchOpen(false); }
+                else if (event.key === "Escape") { setSearchOpen(false); searchInputRef.current?.blur(); }
+              }}
               placeholder={searchPlaceholder}
               className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-300 focus:bg-white transition-all"
             />
@@ -79,8 +92,18 @@ export function DashboardLayout({
             ) : (
               <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white border border-slate-200 text-slate-400 rounded text-[9px] font-mono pointer-events-none">⌘K</kbd>
             )}
+            {searchOpen && searchQuery.trim() && searchSuggestions.length > 0 && <div className="absolute inset-x-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+              <div className="border-b border-slate-100 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">Suggestions</div>
+              {searchSuggestions.slice(0, 8).map((suggestion, index) => <button key={suggestion.id} type="button" onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveSuggestion(index)} onClick={() => { onSearchChange?.(suggestion.value ?? suggestion.label); setSearchOpen(false); }}
+                className={`flex w-full items-center gap-3 border-b border-slate-50 px-3 py-2.5 text-left last:border-0 ${activeSuggestion === index ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{suggestion.label}</span>{suggestion.meta && <span className="mt-0.5 block truncate text-[10px] text-slate-400">{suggestion.meta}</span>}</span>
+              </button>)}
+            </div>}
           </div>
         </div>
+
+        {headerActions && <div className="hidden lg:flex shrink-0 items-center gap-2">{headerActions}</div>}
 
         <div className="ml-auto flex items-center gap-2">
           <NotificationBell />

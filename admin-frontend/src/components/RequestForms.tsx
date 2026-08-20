@@ -1,11 +1,16 @@
 // Specialized sub-forms for the New Request dialog.
 // Each form owns its own local UI + returns a `details` payload the admin can review.
 
-import { Train, Plane, Car, Package, Utensils, Download, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Train, Plane, Car, Package, Utensils, Download, CheckCircle2, Clock3 } from "lucide-react";
 import { fmtINR } from "./requestMeta";
 import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
 import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
 import { businessCardTemplate, type BusinessCardBrand, type BusinessCardDetails } from "./business-card/businessCardTemplates";
+import { VisionIndiaIdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
+import { PhotoCropper } from "./id-card/PhotoCropper";
+import { downloadIdCardPdf } from "./id-card/idCardPdf";
+import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
 
 /* ---------- shared field helpers ---------- */
 const inputCls =
@@ -14,12 +19,12 @@ const labelCls = "text-[10px] font-bold uppercase tracking-widest text-slate-300
 const sectionCls = "p-3.5 rounded-2xl border border-white/15 bg-white/8 space-y-3";
 
 export function TextField({
-  label, value, onChange, placeholder, type = "text",
-}: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+  label, value, onChange, placeholder, type = "text", min, max,
+}: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; min?: string; max?: string }) {
   return (
     <div>
       <label className={labelCls}>{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputCls} />
+      <input type={type} value={value} min={min} max={max} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputCls} />
     </div>
   );
 }
@@ -95,16 +100,40 @@ export function VisitingCardForm({ value, onChange }: { value: VCState; onChange
 export interface IdCardState {
   issueType: "new" | "lost" | "damaged" | "details_changed" | "expired";
   reason: string;
+  designation: string;
+  phone: string;
+  bloodGroup: string;
+  emergencyPhone: string;
+  photoDataUrl: string;
+  confirmed: boolean;
 }
 export interface RequesterProfile {
+  id?: number;
   name: string;
   email: string;
   company: string;
   dept: string;
   center_code?: string | null;
 }
-export const emptyIdCard = (): IdCardState => ({ issueType: "new", reason: "" });
-export const idCardValid = (value: IdCardState) => value.reason.trim().length >= 5;
+export const emptyIdCard = (): IdCardState => ({ issueType: "new", reason: "", designation: "", phone: "",
+  bloodGroup: "", emergencyPhone: "", photoDataUrl: "", confirmed: false });
+export const idCardDetails = (value: IdCardState, profile?: RequesterProfile): IdCardDetails => ({
+  brand: "vision_india", name: profile?.name || "Authenticated employee",
+  employeeCode: profile?.id ? `EMP-${String(profile.id).padStart(4, "0")}` : "EMP-PENDING",
+  designation: value.designation.trim() || profile?.dept || "—", department: profile?.dept || "—",
+  phone: value.phone, bloodGroup: value.bloodGroup, emergencyPhone: value.emergencyPhone, photoDataUrl: value.photoDataUrl,
+});
+const idCardReady = (value: IdCardState, profile?: RequesterProfile) => Boolean(value.photoDataUrl && value.phone.trim().length >= 7 &&
+  value.emergencyPhone.trim().length >= 7 && value.bloodGroup && (value.designation.trim() || profile?.dept));
+export const idCardValid = (value: IdCardState, profile?: RequesterProfile) =>
+  value.reason.trim().length >= 5 && idCardReady(value, profile) && value.confirmed;
+
+const readIdPhoto = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onerror = () => reject(new Error("Photo could not be read"));
+  reader.onload = () => resolve(String(reader.result));
+  reader.readAsDataURL(file);
+});
 
 const ID_CARD_REASONS: Array<{ id: IdCardState["issueType"]; label: string; hint: string }> = [
   { id: "new", label: "New / first card", hint: "New joining or first ID card" },
@@ -115,6 +144,9 @@ const ID_CARD_REASONS: Array<{ id: IdCardState["issueType"]; label: string; hint
 ];
 
 export function IdCardForm({ value, onChange, profile }: { value: IdCardState; onChange: (value: IdCardState) => void; profile?: RequesterProfile }) {
+  const [cropSource, setCropSource] = useState("");
+  const details = idCardDetails(value, profile);
+  const set = <K extends keyof IdCardState>(key: K, next: IdCardState[K]) => onChange({ ...value, [key]: next });
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3.5">
@@ -122,6 +154,44 @@ export function IdCardForm({ value, onChange, profile }: { value: IdCardState; o
         <p className="mt-1 text-sm font-semibold text-white">{profile?.name || "Authenticated employee"}</p>
         <p className="mt-1 text-xs text-slate-300">{profile?.company || "Company from profile"} · {profile?.dept || "Department"}</p>
         <p className="mt-0.5 text-[10px] text-slate-400">{profile?.email || "Work email"} · Center {profile?.center_code || "Unassigned"}</p>
+        {profile?.company && profile.company.trim().toLowerCase() !== "vision india" && <p className="mt-2 text-[10px] font-semibold text-indigo-200">Selected ID-card template: Vision India · additional company templates can be added next.</p>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <TextField label="Designation" value={value.designation} onChange={(next) => set("designation", next)} placeholder={profile?.dept || "Designation"} />
+        <TextField label="Contact number" value={value.phone} onChange={(next) => set("phone", next.replace(/[^0-9+ -]/g, ""))} placeholder="+91 98xxxxxx" />
+        <SelectField label="Blood group" value={value.bloodGroup} onChange={(next) => set("bloodGroup", next)} options={["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]} />
+        <TextField label="Emergency number" value={value.emergencyPhone} onChange={(next) => set("emergencyPhone", next.replace(/[^0-9+ -]/g, ""))} placeholder="Emergency contact" />
+      </div>
+
+      <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+        <div className="flex items-center gap-3">
+          <div className="h-16 w-14 overflow-hidden rounded-lg border border-white/20 bg-slate-800">
+            {value.photoDataUrl ? <img src={value.photoDataUrl} alt="ID preview" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[9px] text-slate-400">PHOTO</span>}
+          </div>
+          <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-white">Employee photograph *</p><p className="mt-0.5 text-[10px] text-slate-400">Upload a clear front-facing passport photo.</p></div>
+          <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-semibold text-white hover:bg-white/15">
+            {value.photoDataUrl ? "Change" : "Upload"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only"
+              onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = "";
+                if (file) void readIdPhoto(file).then(setCropSource); }} />
+          </label>
+        </div>
+      </div>
+      {cropSource && <PhotoCropper source={cropSource} onCancel={() => setCropSource("")}
+        onApply={(photo) => { set("photoDataUrl", photo); setCropSource(""); }} />}
+
+      <div className="rounded-xl border border-white/10 bg-slate-950/35 p-3">
+        <VisionIndiaIdCardPreview details={details} />
+        <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
+          <button type="button" disabled={!idCardReady(value, profile)} onClick={() => void downloadIdCardPdf(details)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">
+            <Download className="h-3.5 w-3.5" /> Download PDF preview
+          </button>
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={value.confirmed} onChange={(event) => set("confirmed", event.target.checked)} className="h-4 w-4 accent-indigo-500" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Details verified
+          </label>
+        </div>
       </div>
 
       <div>
@@ -139,7 +209,7 @@ export function IdCardForm({ value, onChange, profile }: { value: IdCardState; o
 
       <div>
         <label className={labelCls}>Reason / explanation *</label>
-        <textarea value={value.reason} onChange={(event) => onChange({ ...value, reason: event.target.value })} rows={4}
+        <textarea value={value.reason} onChange={(event) => set("reason", event.target.value)} rows={4}
           placeholder={value.issueType === "lost" ? "Where and how was the card lost?" : "Briefly explain why a new ID card is required…"}
           className={inputCls} maxLength={500} />
         <p className="mt-1 text-[10px] text-slate-400">Name, company, department and center will be taken from your employee profile.</p>
@@ -150,7 +220,7 @@ export function IdCardForm({ value, onChange, profile }: { value: IdCardState; o
 
 export function summarizeIdCard(value: IdCardState) {
   const label = ID_CARD_REASONS.find((reason) => reason.id === value.issueType)?.label || "ID card";
-  return { subject: `ID Card — ${label}`, description: value.reason.trim() };
+  return { subject: `Vision India ID Card — ${label}`, description: value.reason.trim() };
 }
 
 export type TravelMode = "train" | "flight" | "taxi";
@@ -406,13 +476,34 @@ export const emptyFooding = (): FoodingState => ({
   vegCount: "", nonVegCount: "0",
   menuPref: "Standard combo", specialNotes: "", perHeadBudget: "300",
 });
-export const foodingValid = (f: FoodingState) =>
-  !!f.date && !!f.time && (Number(f.vegCount) + Number(f.nonVegCount)) > 0;
+const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+export function foodingBookingInfo(f: FoodingState, now = new Date()) {
+  const today = localDate(now);
+  const isToday = f.date === today;
+  const inServiceTime = f.time >= "10:00" && f.time <= "20:00";
+  const bookingOpen = now.getHours() >= 10 && now.getHours() < 20;
+  const fmt = (date: Date) => date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  if (!f.date) return { valid: false, message: "Select a date to see the estimated fulfilment time." };
+  if (f.date < today) return { valid: false, message: "Past dates cannot be booked." };
+  if (!inServiceTime) return { valid: false, message: "Food service time must be between 10:00 AM and 8:00 PM." };
+  if (isToday && !bookingOpen) return { valid: false, message: now.getHours() < 10
+    ? "Today's booking opens at 10:00 AM. Expected fulfilment after booking: 12:00–12:30 PM."
+    : "Today's booking is closed after 8:00 PM. Please select a future date." };
+  if (isToday) {
+    const from = new Date(now.getTime() + 120 * 60_000); const to = new Date(now.getTime() + 150 * 60_000);
+    return { valid: true, message: `Estimated fulfilment: ${fmt(from)}–${fmt(to)} (approximately 2–2.5 hours).` };
+  }
+  return { valid: true, message: "Advance booking selected · expected preparation time is approximately 2–2.5 hours." };
+}
+export const foodingValid = (f: FoodingState) => foodingBookingInfo(f).valid &&
+  (Number(f.vegCount) + Number(f.nonVegCount)) > 0;
 
 export function FoodingForm({ value, onChange }: { value: FoodingState; onChange: (v: FoodingState) => void }) {
   const set = <K extends keyof FoodingState>(k: K, v: FoodingState[K]) => onChange({ ...value, [k]: v });
   const total = Number(value.vegCount || 0) + Number(value.nonVegCount || 0);
   const estimate = total * Number(value.perHeadBudget || 0);
+  const booking = foodingBookingInfo(value);
+  const today = localDate(new Date());
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -420,8 +511,8 @@ export function FoodingForm({ value, onChange }: { value: FoodingState; onChange
           options={["Team lunch", "Client meeting", "Training / workshop", "Event / offsite", "Birthday / celebration", "Overtime dinner"]} />
         <SelectField label="Menu preference" value={value.menuPref} onChange={(v) => set("menuPref", v)}
           options={["Standard combo", "North Indian thali", "South Indian", "Continental", "Snacks + tea", "Custom (mention below)"]} />
-        <TextField label="Date" type="date" value={value.date} onChange={(v) => set("date", v)} />
-        <TextField label="Time" type="time" value={value.time} onChange={(v) => set("time", v)} />
+        <TextField label="Date" type="date" min={today} value={value.date} onChange={(v) => set("date", v)} />
+        <TextField label="Service time (10 AM–8 PM)" type="time" min="10:00" max="20:00" value={value.time} onChange={(v) => set("time", v)} />
         <TextField label="Veg count" value={value.vegCount} onChange={(v) => set("vegCount", v.replace(/[^0-9]/g, ""))} />
         <TextField label="Non-veg count" value={value.nonVegCount} onChange={(v) => set("nonVegCount", v.replace(/[^0-9]/g, ""))} />
         <TextField label="Per-head budget (₹)" value={value.perHeadBudget} onChange={(v) => set("perHeadBudget", v.replace(/[^0-9]/g, ""))} />
@@ -434,6 +525,12 @@ export function FoodingForm({ value, onChange }: { value: FoodingState; onChange
             </p>
           </div>
         </div>
+      </div>
+      <div className={`flex gap-2 rounded-xl border px-3 py-2.5 text-xs ${booking.valid
+        ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
+        : "border-amber-400/25 bg-amber-500/10 text-amber-200"}`}>
+        <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div><p className="font-semibold">Booking hours: 10:00 AM–8:00 PM</p><p className="mt-0.5 opacity-85">{booking.message}</p></div>
       </div>
       <div>
         <label className={labelCls}>Special notes (allergies, jain, halal…)</label>
@@ -490,8 +587,13 @@ export function detailRows(type: string, details: Record<string, unknown> | unde
       return [
         { label: "Issue type", value: s(ID_CARD_REASONS.find((reason) => reason.id === d.issueType)?.label ?? d.issueType) },
         { label: "Reason", value: s(d.reason) },
-        { label: "Profile company", value: s(d.profileCompany) },
-        { label: "Profile center", value: s(d.profileCenter) },
+        { label: "Employee code", value: s(d.employeeCode) },
+        { label: "Designation", value: s(d.designation) },
+        { label: "Department", value: s(d.department) },
+        { label: "Contact", value: s(d.phone) },
+        { label: "Blood group", value: s(d.bloodGroup) },
+        { label: "Emergency no.", value: s(d.emergencyPhone) },
+        { label: "Company / center", value: `${s(d.profileCompany)} · ${s(d.profileCenter)}` },
       ];
     case "visiting_card":
       return [

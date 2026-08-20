@@ -12,6 +12,32 @@ const paymentCategories = new Set([
   "id_card",
 ]);
 
+export type WorkflowNotification = {
+  ref: string;
+  homeCenter: string;
+  requestCenter: string;
+  approvalRole: string;
+  approvalUserId: number | null;
+  category: string;
+};
+
+export async function notifyWorkflowCreated(input: WorkflowNotification) {
+  const { ref, homeCenter: home, requestCenter: requested, approvalRole: role,
+    approvalUserId: userId, category } = input;
+  const actionUrl = role === "center_admin" ? "/center-admin" : role === "hq_admin" ? "/admin" : "/super-admin";
+  const jobs: Promise<unknown>[] = [userId
+    ? notify({ userId, message: `${ref} requires your approval.`, kind: "approval", actionUrl })
+    : notifyRole(role, role === "super_admin" ? null : requested,
+      `${ref} requires your approval.`, "approval", actionUrl)];
+  if (home !== requested) jobs.push(notifyRole("center_admin", home,
+    `${ref} was raised at ${requested}; expense will charge your center.`, "watching", "/center-admin"));
+  if (category === "visiting_card") jobs.push(
+    notifyRole("hq_admin", null, `${ref} has a print-ready visiting card PDF for review.`, "approval_watch", "/admin"),
+    notifyRole("super_admin", null, `${ref} has a print-ready visiting card PDF for oversight.`, "approval_watch", "/super-admin"),
+  );
+  await Promise.all(jobs);
+}
+
 async function approvalRole(category: string, center: string, amount: number) {
   const result = await pool
     .request()
@@ -83,36 +109,8 @@ export async function initializeWorkflow(
     .input("id", mssql.Int, requestId)
     .query(`SELECT ref_id FROM requests WHERE id=@id`);
   const ref = request.recordset[0]?.ref_id || `#${requestId}`;
-  const actionUrl = owner.role === "center_admin" ? "/center-admin" : owner.role === "hq_admin" ? "/admin" : "/super-admin";
-  if (owner.userId)
-    await notify({
-      userId: owner.userId,
-      message: `${ref} requires your approval.`,
-      kind: "approval",
-      actionUrl,
-    });
-  else
-    await notifyRole(
-      owner.role,
-      owner.role === "super_admin" ? null : requested,
-      `${ref} requires your approval.`,
-      "approval",
-      actionUrl,
-    );
-  if (home !== requested)
-    await notifyRole(
-      "center_admin",
-      home,
-      `${ref} was raised at ${requested}; expense will charge your center.`,
-      "watching",
-      "/center-admin",
-    );
-  if (category === "visiting_card") {
-    await Promise.all([
-      notifyRole("hq_admin", null, `${ref} has a print-ready visiting card PDF for review.`, "approval_watch", "/admin"),
-      notifyRole("super_admin", null, `${ref} has a print-ready visiting card PDF for oversight.`, "approval_watch", "/super-admin"),
-    ]);
-  }
+  await notifyWorkflowCreated({ ref, homeCenter: home, requestCenter: requested,
+    approvalRole: owner.role, approvalUserId: owner.userId, category });
   return {
     homeCenter: home,
     requestCenter: requested,
