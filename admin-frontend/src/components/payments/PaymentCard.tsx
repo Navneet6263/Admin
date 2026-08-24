@@ -22,6 +22,7 @@ export interface PaymentRow {
 export function PaymentCard({ row, onDone }: { row: PaymentRow; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({
     actual_amount: String(row.actual_amount ?? row.estimated_amount ?? ""),
     vendor_name: row.vendor_name || "",
@@ -31,22 +32,26 @@ export function PaymentCard({ row, onDone }: { row: PaymentRow; onDone: () => vo
     notes: "",
   });
   const update = async () => {
-    setBusy(true);
+    setBusy(true); setError("");
     try {
       await request(`/api/payments/${row.request_id}/update`, {
         method: "POST",
         body: { ...form, actual_amount: Number(form.actual_amount) },
       });
       onDone();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Payment update failed");
     } finally {
       setBusy(false);
     }
   };
   const verify = async () => {
-    setBusy(true);
+    setBusy(true); setError("");
     try {
       await request(`/api/payments/${row.request_id}/verify`, { method: "POST" });
       onDone();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Payment verification failed");
     } finally {
       setBusy(false);
     }
@@ -158,6 +163,7 @@ export function PaymentCard({ row, onDone }: { row: PaymentRow; onDone: () => vo
           )}
         </div>
       )}
+      {error && <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">{error}</p>}
     </article>
   );
 }

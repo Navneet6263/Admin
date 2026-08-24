@@ -1,155 +1,109 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { request, type Paged } from "@/lib/api";
-import { useSessionUser } from "@/lib/useSessionUser";
-import { CenterBudgetRing } from "@/components/center-admin/CenterBudgetRing";
-import { CenterRequestCard, type CenterRequest } from "@/components/center-admin/CenterRequestCard";
-import { CenterStatsRow } from "@/components/center-admin/CenterStatsRow";
-import { InventoryPanel } from "@/components/InventoryPanel";
-import { CheckCircle2, XCircle, Inbox, IndianRupee, Building2, Package } from "lucide-react";
-import { protectedRoute } from "@/components/ProtectedRoute";
+import { createFileRoute } from '@tanstack/react-router';
+import { Activity, Building2, ClipboardCheck, LayoutDashboard, Package, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { CenterInventoryTable } from '@/components/center-admin/CenterInventoryTable';
+import { CenterOverview } from '@/components/center-admin/CenterOverview';
+import { CenterRequestCard, type CenterRequest } from '@/components/center-admin/CenterRequestCard';
+import type { CenterActivityRow, CenterInventoryRow, CenterOverviewData } from '@/components/center-admin/types';
+import { DashboardLayout } from '@/components/DashboardLayout';
+import { protectedRoute } from '@/components/ProtectedRoute';
+import { request, type Paged } from '@/lib/api';
+import { useSessionUser } from '@/lib/useSessionUser';
 
-export const Route = createFileRoute("/center-admin")({
-  head: () => ({
-    meta: [
-      { title: "Center Admin — RequestHub" },
-      { name: "description", content: "Center-wise request management for center administrators." },
-    ],
-  }),
+type Tab = 'overview' | 'approvals' | 'activity' | 'inventory';
+type QueueFilter = 'awaiting_approval' | 'approved' | 'rejected' | 'all';
+
+export const Route = createFileRoute('/center-admin')({
+  head: () => ({ meta: [{ title: 'Center Admin · RequestHub' },
+    { name: 'description', content: 'Center operations, approvals, budget, activity and inventory.' }] }),
   component: protectedRoute(CenterAdminDashboard, ['center_admin']),
 });
 
-interface Budget {
-  center_name: string; city: string;
-  allocated: number; committed: number; spent: number;
-}
-
-interface Stats {
-  pending: number; approved: number; rejected: number;
-  awaiting_verification: number; total: number; avg_response_hrs: number;
-}
-
-const fmt = (n: number | null) => (n != null ? `₹${n.toLocaleString("en-IN")}` : "—");
-
 function CenterAdminDashboard() {
-  const [requests, setRequests] = useState<CenterRequest[]>([]);
-  const [budget, setBudget] = useState<Budget | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState<"pending" | "approved" | "rejected" | "inventory">("pending");
-  const [loading, setLoading] = useState(true);
   const user = useSessionUser();
+  const [tab, setTab] = useState<Tab>('overview');
+  const [filter, setFilter] = useState<QueueFilter>('awaiting_approval');
+  const [overview, setOverview] = useState<CenterOverviewData | null>(null);
+  const [activity, setActivity] = useState<CenterActivityRow[]>([]);
+  const [inventory, setInventory] = useState<CenterInventoryRow[]>([]);
+  const [requests, setRequests] = useState<CenterRequest[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const fetchAll = useCallback(async () => {
-    if (tab === "inventory") { setLoading(false); return; }
-    setLoading(true);
+  const loadQueue = useCallback(async (status: QueueFilter) => {
+    const page = await request<Paged<CenterRequest>>(`/api/workflow/queue?status=${status}&page_size=100`);
+    setRequests(page.data);
+  }, []);
+  const refresh = useCallback(async () => {
+    setLoading(true); setError('');
     try {
-      const workflowStatus = tab === "pending" ? "awaiting_approval" : tab;
-      const [reqs, bud, st] = await Promise.all([
-        request<Paged<CenterRequest>>(`/api/workflow/queue?status=${workflowStatus}&page_size=100`),
-        request<Budget>("/api/center-admin/budget"),
-        request<Stats>("/api/center-admin/stats"),
+      const [summary, logs] = await Promise.all([
+        request<CenterOverviewData>('/api/center-admin/overview'),
+        request<CenterActivityRow[]>('/api/center-admin/activity?limit=40'),
+        loadQueue(filter),
       ]);
-      setRequests(reqs.data); setBudget(bud); setStats(st);
-    } catch (e) { console.error(e); }
+      setOverview(summary); setActivity(logs);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Dashboard could not be loaded'); }
     finally { setLoading(false); }
-  }, [tab]);
+  }, [filter, loadQueue]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (tab !== 'inventory' || inventory.length) return;
+    void request<CenterInventoryRow[]>('/api/center-admin/inventory-view').then(setInventory).catch((cause) =>
+      setError(cause instanceof Error ? cause.message : 'Inventory could not be loaded'));
+  }, [inventory.length, tab]);
 
-  useEffect(() => { void fetchAll(); }, [fetchAll]);
-
-  const approve = async (id: number) => {
-    await request(`/api/workflow/requests/${id}/approve`, { method: "POST", body: { remarks: "" } });
-    void fetchAll();
+  const act = async (id: number, action: 'approve' | 'reject') => {
+    setError('');
+    try {
+      await request(`/api/workflow/requests/${id}/${action}`, { method: 'POST', body: { remarks: '' } });
+      await refresh();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : `Request could not be ${action}d`;
+      setError(message);
+    }
   };
-  const reject = async (id: number) => {
-    await request(`/api/workflow/requests/${id}/reject`, { method: "POST", body: { remarks: "" } });
-    void fetchAll();
-  };
-
-  const TABS = [
-    { key: "pending" as const, label: "Inbox", icon: Inbox },
-    { key: "approved" as const, label: "Approved", icon: CheckCircle2 },
-    { key: "rejected" as const, label: "Rejected", icon: XCircle },
-    { key: "inventory" as const, label: "Inventory", icon: Package },
+  const visible = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    return requests.filter((row) => !value || `${row.ref_id} ${row.subject} ${row.employeeName}`.toLowerCase().includes(value));
+  }, [query, requests]);
+  const tabs = [
+    { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { key: 'approvals', label: 'Approval queue', icon: ClipboardCheck, badge: overview?.requests.awaiting_approval },
+    { key: 'activity', label: 'Activity logs', icon: Activity },
+    { key: 'inventory', label: 'Center inventory', icon: Package, badge: overview?.inventory.low_stock },
   ];
 
-  return (
-    <DashboardLayout
-      workspace="Center Console"
-      role="Center Admin"
-      currentUser={user ? `${user.name} · ${user.center_code || "—"}` : "Center Admin"}
-    >
-      <div style={{ minHeight: "100vh", background: "#0a0f1e", padding: "32px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+  return <DashboardLayout workspace="Center Operations" role="Center Admin"
+    currentUser={user ? `${user.name} · ${user.center_code || 'Unassigned'}` : 'Center Admin'}
+    tabs={tabs} activeTab={tab} onTabChange={(value) => setTab(value as Tab)}
+    searchQuery={query} onSearchChange={setQuery} searchPlaceholder="Search request ID, subject or employee">
+    <div className="min-h-full bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <Building2 size={20} color="#6366f1" />
-              <span style={{ fontSize: 13, color: "#6366f1", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>
-                {budget?.center_name ?? "Center Admin"} · {budget?.city ?? ""}
-              </span>
-            </div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, color: "#fff", margin: 0 }}>Request Console</h1>
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-600"><Building2 className="h-3.5 w-3.5" /> {overview?.center.code || user?.center_code || 'Center'}</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{overview?.center.name || 'Center operations'}</h1>
+            <p className="mt-1 text-xs text-slate-500">{overview ? `${overview.center.city} · ${overview.center.company}` : 'Secure center-scoped workspace'}</p>
           </div>
+          <button type="button" onClick={() => void refresh()} disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh data</button>
         </div>
-
-        {stats && <CenterStatsRow stats={stats} />}
-
-        <div style={{ display: "grid", gridTemplateColumns: tab === "inventory" ? "1fr" : "1fr 300px", gap: 24, alignItems: "start" }}>
-          <div>
-            <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 4, marginBottom: 24 }}>
-              {TABS.map(({ key, label, icon: Icon }) => (
-                <button key={key} type="button" onClick={() => setTab(key)} style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  padding: "10px 16px", borderRadius: 10, border: "none", cursor: "pointer",
-                  background: tab === key ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "transparent",
-                  color: tab === key ? "#fff" : "#64748b", fontWeight: 700, fontSize: 13,
-                }}>
-                  <Icon size={15} /> {label}
-                </button>
-              ))}
-            </div>
-
-            {tab === "inventory" ? <div style={{ height: "calc(100vh - 245px)", minHeight: 560 }}><InventoryPanel /></div> :
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {loading ? (
-                <div style={{ textAlign: "center", color: "#64748b", padding: 60 }}>Loading…</div>
-              ) : requests.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 60, color: "#64748b" }}>
-                  <Inbox size={40} style={{ marginBottom: 12, opacity: 0.4 }} />
-                  <div>No {tab} requests</div>
-                </div>
-              ) : requests.map((r) => (
-                <CenterRequestCard key={r.id} req={r} onApprove={approve} onReject={reject} />
-              ))}
-            </div>}
-          </div>
-
-          {budget && tab !== "inventory" && (
-            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 28 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
-                <IndianRupee size={16} color="#fbbf24" />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>
-                  Monthly Budget
-                </span>
-              </div>
-              <CenterBudgetRing allocated={budget.allocated} spent={budget.spent} committed={budget.committed} />
-              <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-                {[
-                  { label: "Allocated", value: budget.allocated, color: "#94a3b8" },
-                  { label: "Spent", value: budget.spent, color: "#ef4444" },
-                  { label: "Committed", value: budget.committed, color: "#fbbf24" },
-                  { label: "Available", value: budget.allocated - budget.spent - budget.committed, color: "#22c55e" },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, color: "#64748b" }}>{label}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color }}>{fmt(value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</div>}
+        {loading && !overview ? <div className="rounded-xl border border-slate-200 bg-white py-24 text-center text-xs text-slate-400">Loading center operations…</div> : <>
+          {tab === 'overview' && overview && <CenterOverview data={overview} activity={activity} />}
+          {tab === 'approvals' && <section>
+            <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['approved','Approved'],['rejected','Rejected'],['all','All history']] as const).map(([value,label]) =>
+              <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>{label}</button>)}</div>
+            <div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} />)}</div>
+            {!visible.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-20 text-center text-sm text-slate-400">No requests match this view.</div>}
+          </section>}
+          {tab === 'activity' && <ActivityFeed rows={activity} title="Center audit trail" subtitle="Every approval and workflow action for this center" />}
+          {tab === 'inventory' && <CenterInventoryTable rows={inventory} />}
+        </>}
       </div>
-    </DashboardLayout>
-  );
+    </div>
+  </DashboardLayout>;
 }

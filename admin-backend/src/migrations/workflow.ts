@@ -91,16 +91,29 @@ const statements = [
     CREATE INDEX IX_auth_sessions_user_expiry ON auth_sessions(user_id,expires_at) INCLUDE(revoked_at)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_payments_status_due')
     CREATE INDEX IX_payments_status_due ON payments(status,due_at) INCLUDE(request_id,actual_amount)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_payments_paid_at')
+    CREATE INDEX IX_payments_paid_at ON payments(paid_at) INCLUDE(actual_amount,estimated_amount) WHERE status='paid'`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_approvals_action_created')
+    CREATE INDEX IX_approvals_action_created ON approvals(action,created_at DESC) INCLUDE(request_id,actor_id)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_center_inventory_stock')
     CREATE INDEX IX_center_inventory_stock ON center_inventory(center_code,sku) INCLUDE(qty,reserved_qty)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_notifications_dedupe')
     CREATE UNIQUE INDEX UX_notifications_dedupe ON notifications(dedupe_key) WHERE dedupe_key IS NOT NULL`,
-  `IF NOT EXISTS (SELECT 1 FROM approval_policies) BEGIN
-    INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics) VALUES
-      ('center_admin',50000,1,1,1,0,0),('hq_admin',1000000,1,1,1,0,1),
-      ('finance',200000,1,0,1,1,0),('finance_head',NULL,1,0,1,1,1),
-      ('super_admin',NULL,1,1,1,1,1);
-  END`,
+  `IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='center_admin')
+      INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
+      VALUES('center_admin',50000,1,1,1,0,0);
+    IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='hq_admin')
+      INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
+      VALUES('hq_admin',1000000,1,1,1,0,1);
+    IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='finance')
+      INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
+      VALUES('finance',200000,1,0,1,1,0);
+    IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='finance_head')
+      INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
+      VALUES('finance_head',NULL,1,0,1,1,1);
+    IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='super_admin')
+      INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
+      VALUES('super_admin',NULL,1,1,1,1,1)`,
   `UPDATE r SET home_center_code=COALESCE(r.home_center_code,u.center_code),
       request_center_code=COALESCE(r.request_center_code,r.home_center_code,u.center_code),
       approval_center_code=COALESCE(r.approval_center_code,r.home_center_code,u.center_code),

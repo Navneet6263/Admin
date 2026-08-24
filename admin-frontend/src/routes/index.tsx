@@ -61,6 +61,7 @@ function Home() {
         const routes: Record<string, string> = {
           super_admin: '/super-admin',
           center_admin: '/center-admin',
+          finance_head: '/finance',
           hq_admin: '/admin',
           admin: '/admin',
         };
@@ -89,6 +90,7 @@ function Home() {
         const routes: Record<string, string> = {
           super_admin: '/super-admin',
           center_admin: '/center-admin',
+          finance_head: '/finance',
           hq_admin: '/admin',
           admin: '/admin',
         };

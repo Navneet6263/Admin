@@ -7,7 +7,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test:security": "node scripts/security-smoke.mjs"
+    "test:security": "node scripts/security-smoke.mjs",
+    "test:dashboards": "node scripts/dashboard-smoke.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

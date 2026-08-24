@@ -1,149 +1,65 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { PaymentCard, type PaymentRow } from "@/components/payments/PaymentCard";
-import { request, type Paged } from "@/lib/api";
-import { useSessionUser } from "@/lib/useSessionUser";
-import { CheckCircle2, Clock3, Landmark } from "lucide-react";
-import { protectedRoute } from "@/components/ProtectedRoute";
+import { createFileRoute } from '@tanstack/react-router';
+import { Activity, BarChart3, Landmark, LayoutDashboard, ReceiptIndianRupee } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ExpenseAnalytics } from '@/components/analytics/ExpenseAnalytics';
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { DashboardLayout } from '@/components/DashboardLayout';
+import { FinanceHeadOverview } from '@/components/finance/FinanceHeadOverview';
+import { PaymentQueue } from '@/components/finance/PaymentQueue';
+import type { FinanceHeadData } from '@/components/finance/types';
+import { protectedRoute } from '@/components/ProtectedRoute';
+import { request } from '@/lib/api';
+import { useSessionUser } from '@/lib/useSessionUser';
 
-export const Route = createFileRoute("/finance")({
-  head: () => ({ meta: [{ title: "Finance · RequestHub" }] }),
+type Tab = 'overview' | 'queue' | 'ledger' | 'activity';
+
+export const Route = createFileRoute('/finance')({
+  head: () => ({ meta: [{ title: 'Finance · RequestHub' },
+    { name: 'description', content: 'Payment operations and Finance Head control dashboard.' }] }),
   component: protectedRoute(FinanceConsole, ['finance', 'finance_head']),
 });
+
 function FinanceConsole() {
-  const [rows, setRows] = useState<PaymentRow[]>([]);
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [requestedId, setRequestedId] = useState("");
   const user = useSessionUser();
-  useEffect(() => { setRequestedId(new URLSearchParams(window.location.search).get("request") || ""); }, []);
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await request<Paged<PaymentRow>>(
-        `/api/payments?status=${status}&page=${page}&page_size=25${requestedId ? `&request_id=${encodeURIComponent(requestedId)}` : ""}`,
-      );
-      setRows(result.data);
-      setTotal(result.total);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, requestedId, status]);
+  const isHead = user?.role === 'finance_head';
+  const [tab, setTab] = useState<Tab>('overview');
+  const [headData, setHeadData] = useState<FinanceHeadData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
-    void load();
-  }, [load]);
-  const metrics = useMemo(
-    () => ({
-      pending: rows.filter((r) => r.status !== "paid").length,
-      paid: rows.filter((r) => r.status === "paid").length,
-      value: rows.reduce((n, r) => n + Number(r.actual_amount ?? r.estimated_amount ?? 0), 0),
-    }),
-    [rows],
-  );
-  return (
-    <DashboardLayout
-      workspace="Finance Operations"
-      currentUser={user?.name || "Finance"}
-      role={user?.role === "finance_head" ? "Head Finance" : "Finance Executive"}
-    >
-      <div className="max-w-7xl mx-auto px-5 py-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-indigo-500">
-              Controlled fund operations
-            </p>
-            <h1 className="text-2xl font-semibold flex gap-2">
-              <Landmark className="w-6 h-6" />
-              Payment Control
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Your limits and capabilities are enforced by Super Admin policy.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Metric icon={Clock3} label="Open on page" value={metrics.pending} />
-            <Metric icon={CheckCircle2} label="Paid on page" value={metrics.paid} />
-            <Metric
-              icon={Landmark}
-              label="Page value"
-              value={`₹${metrics.value.toLocaleString("en-IN")}`}
-            />
-          </div>
+    if (!isHead) return;
+    setLoading(true); setError('');
+    void request<FinanceHeadData>('/api/payments/head-dashboard')
+      .then(setHeadData).catch((cause) => setError(cause instanceof Error ? cause.message : 'Finance dashboard unavailable'))
+      .finally(() => setLoading(false));
+  }, [isHead]);
+  const tabs = isHead ? [
+    { key: 'overview', label: 'Executive overview', icon: LayoutDashboard },
+    { key: 'queue', label: 'Payment controls', icon: ReceiptIndianRupee, badge: headData?.metrics.awaiting_verification },
+    { key: 'ledger', label: 'Expense ledger', icon: BarChart3 },
+    { key: 'activity', label: 'Finance logs', icon: Activity },
+  ] : [{ key: 'queue', label: 'Payment operations', icon: ReceiptIndianRupee }];
+  const activeTab = isHead ? tab : 'queue';
+  return <DashboardLayout workspace={isHead ? 'Finance Control Center' : 'Finance Operations'}
+    currentUser={user?.name || 'Finance'} role={isHead ? 'Finance Head' : 'Finance Executive'}
+    tabs={tabs} activeTab={activeTab} onTabChange={(value) => setTab(value as Tab)}>
+    <div className="min-h-full bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-5">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-600"><Landmark className="h-3.5 w-3.5" /> {isHead ? 'Enterprise finance governance' : 'Controlled fund operations'}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{isHead ? 'Finance Head dashboard' : 'Payment operations'}</h1>
+          <p className="mt-1 text-xs text-slate-500">{isHead ? 'Global spend, payment risk, verification performance and audit visibility.' : 'Update and verify payments within your assigned policy limits.'}</p>
         </div>
-        <div className="flex gap-2 my-5 border-b">
-          {[
-            ["all", "All"],
-            ["awaiting_update", "Need update"],
-            ["awaiting_verification", "Verify"],
-            ["paid", "Paid"],
-          ].map(([v, l]) => (
-            <button
-              key={v}
-              onClick={() => {
-                setStatus(v);
-                setPage(1);
-              }}
-              className={`px-3 py-2 text-xs border-b-2 ${status === v ? "border-slate-900 font-semibold" : "border-transparent text-slate-500"}`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        {loading ? (
-          <div className="py-20 text-center text-slate-400">Loading secure payment queue…</div>
-        ) : (
-          <div className="grid lg:grid-cols-2 gap-3">
-            {rows.map((r) => (
-              <PaymentCard key={r.request_id} row={r} onDone={() => void load()} />
-            ))}
-          </div>
-        )}
-        {!loading && !rows.length && (
-          <div className="py-20 text-center text-slate-400">No payments in this queue.</div>
-        )}
-        <div className="flex justify-between items-center mt-5 text-xs text-slate-500">
-          <span>{total} records</span>
-          <div className="flex gap-2">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="border rounded px-3 py-1.5 disabled:opacity-30"
-            >
-              Previous
-            </button>
-            <span className="px-2 py-1.5">Page {page}</span>
-            <button
-              disabled={page * 25 >= total}
-              onClick={() => setPage((p) => p + 1)}
-              className="border rounded px-3 py-1.5 disabled:opacity-30"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</div>}
+        {isHead && activeTab === 'overview' && (loading || !headData ? <Loading /> : <FinanceHeadOverview data={headData} />)}
+        {activeTab === 'queue' && <PaymentQueue defaultStatus={isHead ? 'awaiting_verification' : 'all'} />}
+        {isHead && activeTab === 'ledger' && <ExpenseAnalytics />}
+        {isHead && activeTab === 'activity' && (headData ? <ActivityFeed rows={headData.activity} title="Finance audit trail" subtitle="Payment updates and verifications recorded across every center" /> : <Loading />)}
       </div>
-    </DashboardLayout>
-  );
-}
-function Metric({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Clock3;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="bg-white border rounded-xl px-3 py-2 min-w-28">
-      <p className="text-[9px] uppercase text-slate-400 flex gap-1">
-        <Icon className="w-3 h-3" />
-        {label}
-      </p>
-      <b className="text-sm">{value}</b>
     </div>
-  );
+  </DashboardLayout>;
+}
+
+function Loading() {
+  return <div className="rounded-xl border border-slate-200 bg-white py-24 text-center text-xs text-slate-400">Loading Finance Head controls…</div>;
 }
