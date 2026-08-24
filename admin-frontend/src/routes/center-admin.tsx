@@ -8,6 +8,7 @@ import { CenterRequestCard, type CenterRequest } from "@/components/center-admin
 import { CenterStatsRow } from "@/components/center-admin/CenterStatsRow";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { CheckCircle2, XCircle, Inbox, IndianRupee, Building2, Package } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/center-admin")({
   head: () => ({
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/center-admin")({
       { name: "description", content: "Center-wise request management for center administrators." },
     ],
   }),
-  component: CenterAdminDashboard,
+  component: protectedRoute(CenterAdminDashboard, ['center_admin']),
 });
 
 interface Budget {

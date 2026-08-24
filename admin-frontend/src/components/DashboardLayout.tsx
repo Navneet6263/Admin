@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { LogOut, Search, Command, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { NotificationBell } from "./NotificationBell";
+import { session } from "@/lib/api";
 
 export interface WorkspaceTab {
   key: string;
@@ -116,9 +116,10 @@ export function DashboardLayout({
               <p className="text-[10px] text-slate-400">{role}</p>
             </div>
           </div>
-          <Link to="/" className="w-8 h-8 grid place-items-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-900" title="Switch role">
+          <button type="button" onClick={() => void session.logout().finally(() => window.location.replace('/'))}
+            className="w-8 h-8 grid place-items-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-900" title="Sign out">
             <LogOut className="w-4 h-4" strokeWidth={1.75} />
-          </Link>
+          </button>
         </div>
       </header>
 

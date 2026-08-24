@@ -41,3 +41,5 @@ Thumbs.db
 *.sw?
 scratch/
 
+# Private UAT handover material (contains temporary credentials)
+UAT-Handover-Nikhil/

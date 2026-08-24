@@ -139,57 +139,8 @@ router.put('/:id', requireAuth('super_admin'), async (req: Request, res: Respons
 });
 
 // ── POST /api/centers/join-by-code — Employee joins a center using Center Code ──
-router.post('/join-by-code', requireAuth('employee'), async (req: Request, res: Response) => {
-  const { center_code } = req.body;
-  const user_id = req.user!.id;
-  if (!user_id || !center_code?.trim()) {
-    return res.status(400).json({ error: 'User ID and Center Code are required' });
-  }
-
-  const code = center_code.trim().toUpperCase();
-
-  try {
-    // Check if center exists
-    const centerRes = await pool.request()
-      .input('code', mssql.NVarChar(10), code)
-      .query(`SELECT id, code, name, city FROM centers WHERE code = @code AND is_active = 1`);
-
-    if (centerRes.recordset.length === 0) {
-      return res.status(404).json({ error: `Invalid Center Code "${code}". Please check with your Admin.` });
-    }
-
-    const center = centerRes.recordset[0];
-
-    // Link user in user_centers
-    await pool.request()
-      .input('user_id', mssql.Int, user_id)
-      .input('code', mssql.NVarChar(10), code)
-      .query(`
-        MERGE user_centers AS target
-        USING (SELECT @user_id AS user_id) AS source
-        ON (target.user_id = source.user_id)
-        WHEN MATCHED THEN
-          UPDATE SET home_center_code = @code, assigned_at = GETDATE()
-        WHEN NOT MATCHED THEN
-          INSERT (user_id, home_center_code) VALUES (@user_id, @code);
-      `);
-
-    // Also update users.center_code
-    await pool.request()
-      .input('user_id', mssql.Int, user_id)
-      .input('code', mssql.NVarChar(10), code)
-      .query(`UPDATE users SET center_code = @code WHERE id = @user_id`);
-
-    clearCache('centers:all');
-    res.json({
-      success: true,
-      message: `Successfully joined center ${center.name} (${center.code})!`,
-      center,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to join center' });
-  }
+router.post('/join-by-code', requireAuth('employee'), (_req: Request, res: Response) => {
+  res.status(403).json({ error: 'Center assignments can only be changed by an administrator' });
 });
 
 export default router;

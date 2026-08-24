@@ -123,13 +123,18 @@ export function SmartUserForm({
   const handleStep2 = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) { setError('Name and email required'); return; }
-    if (needsCenter && !centerCode) { setError('Is role ko center assign karna zaroori hai'); return; }
+    if (needsCenter && !centerCode) { setError('A center assignment is required for this role'); return; }
     setError(''); setStep(3);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim() || password.length < 6) { setError('Password minimum 6 characters'); return; }
+    if (password.length < 12 || password.length > 128
+      || !/[a-z]/.test(password) || !/[A-Z]/.test(password)
+      || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      setError('Use 12–128 characters with uppercase, lowercase, number and special character');
+      return;
+    }
     setSaving(true); setError('');
     try {
       const payload: Record<string, string> = { name, email, role, password };
@@ -169,7 +174,7 @@ export function SmartUserForm({
           <UserPlus className="w-5 h-5 text-indigo-600" />
           <div>
             <h2 className="font-display font-semibold text-slate-900 text-base">Create User Account</h2>
-            <p className="text-xs text-slate-500">Pehle role chunein — uske baad relevant fields automatically dikhenge</p>
+            <p className="text-xs text-slate-500">Choose a role first. Relevant fields will appear automatically.</p>
           </div>
         </div>
         <div className="flex items-center gap-0">
@@ -204,7 +209,7 @@ export function SmartUserForm({
 
         {step === 1 && (
           <div>
-            <p className="text-sm text-slate-600 mb-4 font-medium">Is user ka role kya hai?</p>
+            <p className="text-sm text-slate-600 mb-4 font-medium">What role should this user have?</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {ROLE_CARDS.filter((card) => !allowedRoles || allowedRoles.includes(card.role)).map((card) => (
                 <button
@@ -276,7 +281,7 @@ export function SmartUserForm({
                   <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
                     Home Center {needsCenter ? '*' : '(optional)'}
                     {needsCenter && (
-                      <span className="ml-2 text-rose-500 font-normal">— Center Admin ka center zaroori hai</span>
+                      <span className="ml-2 text-rose-500 font-normal">— A center is required for Center Admin</span>
                     )}
                   </label>
                   <CenterCombobox centers={centers} value={centerCode} onChange={setCenterCode}
@@ -327,11 +332,11 @@ export function SmartUserForm({
               <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Set Initial Password *</label>
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
+                placeholder="12+ characters with mixed character types"
                 className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
-                required minLength={6} autoFocus
+                required minLength={12} maxLength={128} autoFocus
               />
-              <p className="text-xs text-slate-400 mt-1.5">User can change this after first login.</p>
+              <p className="text-xs text-slate-400 mt-1.5">Include uppercase, lowercase, number and special character.</p>
             </div>
 
             <div className="flex justify-between mt-6">

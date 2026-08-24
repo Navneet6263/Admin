@@ -5,10 +5,11 @@ import { PaymentCard, type PaymentRow } from "@/components/payments/PaymentCard"
 import { request, type Paged } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { CheckCircle2, Clock3, Landmark } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({ meta: [{ title: "Finance · RequestHub" }] }),
-  component: FinanceConsole,
+  component: protectedRoute(FinanceConsole, ['finance', 'finance_head']),
 });
 function FinanceConsole() {
   const [rows, setRows] = useState<PaymentRow[]>([]);

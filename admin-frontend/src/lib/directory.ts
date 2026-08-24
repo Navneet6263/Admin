@@ -13,7 +13,7 @@ export function useCompanies() {
 
   useEffect(() => {
     let active = true;
-    request<CompanyRow[]>("/api/companies", {}, false)
+    request<CompanyRow[]>("/api/companies")
       .then((rows) => { if (active) setCompanies(rows); })
       .catch((error) => console.error("Unable to load companies", error));
     return () => { active = false; };

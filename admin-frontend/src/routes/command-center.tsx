@@ -7,6 +7,7 @@ import {
   Activity, TrendingUp, AlertTriangle, CheckCircle2,
   MapPin, Clock, IndianRupee, Zap, BarChart3, Users, ArrowUpRight
 } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/command-center")({
   head: () => ({
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/command-center")({
       { name: "description", content: "Super Admin command center with live center health, budget burn rate, and peer comparison." },
     ],
   }),
-  component: CommandCenter,
+  component: protectedRoute(CommandCenter, ['admin', 'hq_admin', 'super_admin']),
 });
 
 const fmt = (n: number) => `₹${(n / 1000).toFixed(0)}k`;

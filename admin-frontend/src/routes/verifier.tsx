@@ -8,6 +8,7 @@ import { getRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { useCompanies } from "@/lib/directory";
 import { ShieldCheck, Inbox, CheckCircle2, Undo2, Filter, ChevronDown } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/verifier")({
   head: () => ({
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/verifier")({
       { name: "description", content: "Two-stage verification console — verify claims and bills after admin approval before closing requests." },
     ],
   }),
-  component: VerifierConsole,
+  component: protectedRoute(VerifierConsole, ['verifier']),
 });
 
 type Tab = "queue" | "verified" | "sent_back" | "all";

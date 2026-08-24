@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CenterCombobox } from "@/components/CenterCombobox";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
-import { session, request } from "@/lib/api";
+import { session } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,26 +39,6 @@ function Home() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    Promise.all([
-      request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false).catch(() => []),
-      request<Array<{ id: number; code: string; name: string }>>('/api/companies', {}, false).catch(() => []),
-      request<Array<{ id: number; code: string; name: string; city: string; is_active: boolean }>>('/api/centers/public', {}, false).catch(() => []),
-    ]).then(([tData, cData, centerData]) => {
-      if (Array.isArray(tData) && tData.length > 0) {
-        setTeams(tData);
-        setFormData((prev) => ({ ...prev, department: tData[0].name }));
-      }
-      if (Array.isArray(cData) && cData.length > 0) {
-        setCompaniesList(cData);
-        setFormData((prev) => ({ ...prev, company: cData[0].name }));
-      }
-      const activeCenters = centerData.filter((center) => center.is_active !== false);
-      setCenters(activeCenters);
-      if (activeCenters[0]) setFormData((prev) => ({ ...prev, center_code: activeCenters[0].code }));
-    });
-  }, []);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -424,20 +404,9 @@ function Home() {
                       </form>
 
                       <p className="text-sm text-slate-500 mt-6 text-center">
-                        {mode === "signin" ? (
+                        {mode === "forgot" ? (
                           <>
-                            No account?{" "}
-                            <button
-                              type="button"
-                              onClick={() => switchMode("register")}
-                              className="text-slate-900 underline underline-offset-2 font-medium"
-                            >
-                              Register
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            Already have an account?{" "}
+                            Return to{" "}
                             <button
                               type="button"
                               onClick={() => switchMode("signin")}
@@ -446,6 +415,8 @@ function Home() {
                               Sign In
                             </button>
                           </>
+                        ) : (
+                          <>Accounts are created by authorized administrators.</>
                         )}
                       </p>
                     </>

@@ -1,12 +1,13 @@
 import { Router } from "express";
 import mssql from "mssql";
-import { effectiveRole } from "../auth";
+import { effectiveRole, requireAssignedCenter } from "../auth";
 import { pool, withDbRetry } from "../db";
 import { authorize } from "../services/policy";
 import { completeApproval } from "../services/approval";
 import { notify, notifyRole } from "../services/notifications";
 
 const router = Router();
+router.use(requireAssignedCenter);
 const paging = (pageValue: unknown, sizeValue: unknown) => {
   const page = Math.max(1, Number(pageValue) || 1);
   const pageSize = Math.min(100, Math.max(10, Number(sizeValue) || 25));

@@ -38,7 +38,7 @@ router.get('/requests', async (req: Request, res: Response) => {
 
 // ── POST /api/super-admin/requests/:id/override ──────────────────────────────
 router.post('/requests/:id/override', async (req: Request, res: Response) => {
-  const { next_status, note = '', sa_id = 10 } = req.body;
+  const { next_status, note = '' } = req.body ?? {};
 
   if (!next_status || !VALID_STATUSES.includes(next_status as RequestStatus))
     return res.status(400).json({ error: 'Invalid next_status' });
@@ -47,19 +47,20 @@ router.post('/requests/:id/override', async (req: Request, res: Response) => {
   try {
     await tx.begin();
 
-    await tx.request()
+    const updated = await tx.request()
       .input('id',     mssql.Int,      +req.params.id)
       .input('status', mssql.NVarChar, next_status)
-      .query(`UPDATE requests SET status = @status, updated_at = GETDATE() WHERE id = @id`);
-
-    const userRes = await tx.request()
-      .input('id', mssql.Int, +req.params.id)
-      .query(`SELECT user_id, ref_id FROM requests WHERE id = @id`);
-    const { user_id: userId, ref_id: refId } = userRes.recordset[0] ?? {};
+      .query(`UPDATE requests SET status=@status,updated_at=GETDATE()
+        OUTPUT inserted.user_id,inserted.ref_id WHERE id=@id`);
+    const { user_id: userId, ref_id: refId } = updated.recordset[0] ?? {};
+    if (!userId) {
+      await tx.rollback();
+      return res.status(404).json({ error: 'Request not found' });
+    }
 
     await tx.request()
       .input('request_id', mssql.Int,     +req.params.id)
-      .input('actor_id',   mssql.Int,     sa_id)
+      .input('actor_id',   mssql.Int,     req.user!.id)
       .input('action',     mssql.NVarChar, next_status === 'approved' ? 'approved' : next_status === 'rejected' ? 'rejected' : 'commented')
       .input('note',       mssql.NVarChar, note || `Super Admin override → ${next_status}`)
       .query(`INSERT INTO approvals (request_id,actor_id,action,note) VALUES (@request_id,@actor_id,@action,@note)`);
@@ -130,7 +131,7 @@ router.get('/inventory', async (_req: Request, res: Response) => {
 
 // ── PATCH /api/super-admin/inventory/:sku ────────────────────────────────────
 router.patch('/inventory/:sku', async (req: Request, res: Response) => {
-  const { qty, note = 'Manual stock edit', actor = 'Super Admin' } = req.body;
+  const { qty, note = 'Manual stock edit' } = req.body ?? {};
   if (typeof qty !== 'number' || qty < 0)
     return res.status(400).json({ error: 'qty must be a non-negative number' });
 
@@ -158,7 +159,7 @@ router.patch('/inventory/:sku', async (req: Request, res: Response) => {
         .input('dir',     mssql.NVarChar, dir)
         .input('qty',     mssql.Int,      Math.abs(diff))
         .input('bal',     mssql.Int,      qty)
-        .input('actor',   mssql.NVarChar, actor)
+        .input('actor',   mssql.NVarChar, `${req.user!.name} (#${req.user!.id})`)
         .input('note',    mssql.NVarChar, note)
         .query(`
           INSERT INTO stock_movements (sku,direction,qty,balance_after,source,actor,note)

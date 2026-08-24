@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, getCached, setCache, clearCache } from '../db';
-import { effectiveRole, hashPassword, Role } from '../auth';
+import { effectiveRole, hashPassword, passwordError, Role } from '../auth';
 
 const router = Router();
 
@@ -26,8 +26,15 @@ router.get('/', async (_req: Request, res: Response) => {
 // ── POST /api/super-admin/users — Create User ─────────────────
 router.post('/', async (req: Request, res: Response) => {
   const { email, name, role, company = 'VT', dept = '', password, center_code = '' } = req.body;
-  if (!email?.trim() || !name?.trim() || !password?.trim())
+  if (!email?.trim() || !name?.trim() || typeof password !== 'string' || !password.trim())
     return res.status(400).json({ error: 'Email, name, and password are required' });
+  if (email.length > 100 || name.length > 100 || String(company).length > 100
+    || String(dept).length > 80 || String(center_code).length > 10)
+    return res.status(400).json({ error: 'One or more fields exceed the allowed length' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+    return res.status(400).json({ error: 'Enter a valid email address' });
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) return res.status(400).json({ error: invalidPassword });
 
   const validRoles: Role[] = [
     'employee', 'admin', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
@@ -42,7 +49,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const passwordHash = hashPassword(password.trim());
+    const passwordHash = hashPassword(password);
     const result = await pool.request()
       .input('email',   mssql.NVarChar(100), email.trim().toLowerCase())
       .input('name',    mssql.NVarChar(100), name.trim())
@@ -52,6 +59,8 @@ router.post('/', async (req: Request, res: Response) => {
       .input('cc',      mssql.NVarChar(10),  center_code || null)
       .input('hash',    mssql.NVarChar(256), passwordHash)
       .query(`
+        IF @cc IS NOT NULL AND NOT EXISTS(SELECT 1 FROM centers WHERE code=@cc AND is_active=1)
+          THROW 50003,'Selected center is not active',1;
         INSERT INTO users (email, name, role, company, dept, center_code, password_hash, is_active)
         OUTPUT inserted.id, inserted.email, inserted.name, inserted.role,
                inserted.company, inserted.dept, inserted.center_code, inserted.is_active, inserted.created_at
@@ -61,6 +70,8 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(result.recordset[0]);
   } catch (err: unknown) {
     console.error(err);
+    if (err instanceof Error && err.message.includes('Selected center is not active'))
+      return res.status(400).json({ error: 'Selected center is not active' });
     if (err instanceof Error && err.message.includes('UNIQUE'))
       return res.status(409).json({ error: 'User with this email already exists' });
     res.status(500).json({ error: 'Failed to create user' });
@@ -71,7 +82,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:id/assign-center', async (req: Request, res: Response) => {
   const { center_code } = req.body;
   const userId = +req.params.id;
-  const actorId = (req.user as any)?.id ?? 1;
+  const actorId = req.user!.id;
   if (!center_code) return res.status(400).json({ error: 'center_code required' });
 
   const tx = pool.transaction();

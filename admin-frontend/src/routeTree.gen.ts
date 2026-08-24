@@ -18,7 +18,6 @@ import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as VerifierRouteImport } from './routes/verifier'
-import { Route as ApiPublicRequestsRouteImport } from './routes/api/public/requests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -65,11 +64,6 @@ const VerifierRoute = VerifierRouteImport.update({
   path: '/verifier',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicRequestsRoute = ApiPublicRequestsRouteImport.update({
-  id: '/api/public/requests',
-  path: '/api/public/requests',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,7 +75,6 @@ export interface FileRoutesByFullPath {
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
-  '/api/public/requests': typeof ApiPublicRequestsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,7 +86,6 @@ export interface FileRoutesByTo {
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
-  '/api/public/requests': typeof ApiPublicRequestsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,7 +98,6 @@ export interface FileRoutesById {
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
-  '/api/public/requests': typeof ApiPublicRequestsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +111,6 @@ export interface FileRouteTypes {
     | '/insights'
     | '/super-admin'
     | '/verifier'
-    | '/api/public/requests'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,7 +122,6 @@ export interface FileRouteTypes {
     | '/insights'
     | '/super-admin'
     | '/verifier'
-    | '/api/public/requests'
   id:
     | '__root__'
     | '/'
@@ -144,7 +133,6 @@ export interface FileRouteTypes {
     | '/insights'
     | '/super-admin'
     | '/verifier'
-    | '/api/public/requests'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,7 +145,6 @@ export interface RootRouteChildren {
   InsightsRoute: typeof InsightsRoute
   SuperAdminRoute: typeof SuperAdminRoute
   VerifierRoute: typeof VerifierRoute
-  ApiPublicRequestsRoute: typeof ApiPublicRequestsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -225,13 +212,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifierRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/requests': {
-      id: '/api/public/requests'
-      path: '/api/public/requests'
-      fullPath: '/api/public/requests'
-      preLoaderRoute: typeof ApiPublicRequestsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -245,7 +225,6 @@ const rootRouteChildren: RootRouteChildren = {
   InsightsRoute: InsightsRoute,
   SuperAdminRoute: SuperAdminRoute,
   VerifierRoute: VerifierRoute,
-  ApiPublicRequestsRoute: ApiPublicRequestsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

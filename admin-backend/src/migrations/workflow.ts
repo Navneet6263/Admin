@@ -38,6 +38,11 @@ const statements = [
     created_by INT NULL REFERENCES users(id), created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   )`,
+  `IF OBJECT_ID('auth_sessions','U') IS NULL CREATE TABLE auth_sessions (
+    token_hash CHAR(64) PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id),
+    expires_at DATETIME2 NOT NULL, revoked_at DATETIME2 NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  )`,
   `IF OBJECT_ID('request_assignments','U') IS NULL CREATE TABLE request_assignments (
     id BIGINT IDENTITY PRIMARY KEY, request_id INT NOT NULL REFERENCES requests(id),
     center_code NVARCHAR(10) NULL REFERENCES centers(code), role NVARCHAR(30) NOT NULL,
@@ -82,6 +87,8 @@ const statements = [
       INCLUDE(type,company,status,amount,actual_amount)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_assignments_queue')
     CREATE INDEX IX_assignments_queue ON request_assignments(role,center_code,is_active,can_act) INCLUDE(request_id,user_id)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_auth_sessions_user_expiry')
+    CREATE INDEX IX_auth_sessions_user_expiry ON auth_sessions(user_id,expires_at) INCLUDE(revoked_at)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_payments_status_due')
     CREATE INDEX IX_payments_status_due ON payments(status,due_at) INCLUDE(request_id,actual_amount)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_center_inventory_stock')

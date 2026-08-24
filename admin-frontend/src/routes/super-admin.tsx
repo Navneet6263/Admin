@@ -21,6 +21,7 @@ import { InventoryTab } from "@/components/super-admin/InventoryTab";
 import { TeamTab } from "@/components/super-admin/TeamTab";
 import { CentersAssignmentPanel } from "@/components/super-admin/CentersPanel";
 import { PolicyTab } from "@/components/super-admin/PolicyTab";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/super-admin")({
   head: () => ({
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/super-admin")({
       { name: "description", content: "Group-wide executive console — insights, advanced analytics, override center and anomaly signals for Vision India Group." },
     ],
   }),
-  component: SuperAdmin,
+  component: protectedRoute(SuperAdmin, ['super_admin']),
 });
 
 function SuperAdmin() {

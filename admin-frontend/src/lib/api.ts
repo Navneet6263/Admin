@@ -27,19 +27,22 @@ export const session = {
     localStorage.removeItem(userKey);
   },
   async login(email: string, password: string) {
-    const data = await request<{ token: string; user: SessionUser }>('/api/auth/login', { method: 'POST', body: { email, password } }, false);
-    localStorage.setItem(tokenKey, data.token);
+    const data = await request<{ user: SessionUser }>('/api/auth/login', { method: 'POST', body: { email, password } }, false);
+    localStorage.removeItem(tokenKey);
     localStorage.setItem(userKey, JSON.stringify(data.user));
     return data.user;
   },
   async register(details: { name: string; email: string; password: string; company?: string; dept?: string; center_code?: string }) {
-    const data = await request<{ token: string; user: SessionUser }>('/api/auth/register', { method: 'POST', body: details }, false);
-    localStorage.setItem(tokenKey, data.token);
+    const data = await request<{ user: SessionUser }>('/api/auth/register', { method: 'POST', body: details }, false);
+    localStorage.removeItem(tokenKey);
     localStorage.setItem(userKey, JSON.stringify(data.user));
     return data.user;
   },
+  async logout() {
+    try { await request('/api/auth/logout', { method: 'POST' }, false); }
+    finally { this.clear(); }
+  },
   async me() {
-    if (!this.token) return null;
     try {
       const u = await request<SessionUser>('/api/auth/me');
       localStorage.setItem(userKey, JSON.stringify(u));
@@ -57,6 +60,7 @@ export async function request<T>(path: string, init: { method?: string; body?: u
     response = await fetch(`${baseUrl}${path}`, {
       method: init.method ?? 'GET', headers: { 'Content-Type': 'application/json', ...(authenticate && session.token ? { Authorization: `Bearer ${session.token}` } : {}) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      credentials: 'include',
     });
   } catch {
     throw new Error('RequestHub server is unavailable. Please start the backend and try again.');

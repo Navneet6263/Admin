@@ -21,6 +21,7 @@ DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS center_budgets;
 DROP TABLE IF EXISTS user_centers;
 DROP TABLE IF EXISTS centers;
+DROP TABLE IF EXISTS auth_sessions;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS teams;
 DROP TABLE IF EXISTS companies;
@@ -63,6 +64,15 @@ CREATE TABLE users (
   password_hash NVARCHAR(256) NOT NULL,
   is_active  BIT NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT GETDATE()
+);
+
+-- SERVER-SIDE LOGIN SESSIONS (only token hashes are stored)
+CREATE TABLE auth_sessions (
+  token_hash CHAR(64) PRIMARY KEY,
+  user_id    INT NOT NULL REFERENCES users(id),
+  expires_at DATETIME2 NOT NULL,
+  revoked_at DATETIME2 NULL,
+  created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
 -- REQUESTS TABLE
@@ -149,6 +159,7 @@ CREATE NONCLUSTERED INDEX idx_req_pending     ON requests(created_at DESC)  WHER
 CREATE NONCLUSTERED INDEX idx_req_verif       ON requests(created_at DESC)  WHERE status = 'awaiting_verification';
 CREATE NONCLUSTERED INDEX idx_req_company_updated ON requests(company, updated_at DESC) INCLUDE (status,type,amount,user_id);
 CREATE NONCLUSTERED INDEX idx_users_login ON users(email) INCLUDE (id,name,role,company,dept,is_active);
+CREATE NONCLUSTERED INDEX IX_auth_sessions_user_expiry ON auth_sessions(user_id,expires_at) INCLUDE(revoked_at);
 CREATE NONCLUSTERED INDEX idx_approvals_req   ON approvals(request_id)      INCLUDE (actor_id,action,created_at);
 CREATE NONCLUSTERED INDEX idx_notif_user_read ON notifications(user_id,is_read) INCLUDE (message,created_at);
 CREATE NONCLUSTERED INDEX idx_inv_category    ON inventory(category)        INCLUDE (qty,threshold);
@@ -172,12 +183,8 @@ INSERT INTO teams (name, company) VALUES
   ('Product',     'VT');
 GO
 
--- ============================================
--- SEED USERS (Single Super Admin: spoken.3764@gmail.com / pass: navneet)
--- ============================================
-INSERT INTO users (email, name, role, company, dept, password_hash) VALUES
-  ('spoken.3764@gmail.com', 'Navneet (Super Admin)', 'super_admin', 'VT', 'Executive', '680bf4a16323ee35256996f395d68b84:c5f364717d3f92584e19c4b543644397cdd4f3acc9865811b67886cd766ab3c15e8c770d2e18ea47c9166549de37075e45f87011c429a000a7c8ebf61e594e86');
-GO
+-- The backend creates the first Super Admin from BOOTSTRAP_SUPER_ADMIN_*
+-- environment values. No predictable production password is seeded here.
 
 -- Transactional requests, approvals, inventory, and stock movements intentionally
 -- start empty. Populate them through the application so every displayed record is real.

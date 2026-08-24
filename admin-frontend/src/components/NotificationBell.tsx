@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, Clock3, X } from "lucide-react";
-import { request, session, type Paged } from "@/lib/api";
+import { request, type Paged } from "@/lib/api";
 
 interface Notice {
   id: number;
@@ -16,7 +16,6 @@ export function NotificationBell() {
   const [items, setItems] = useState<Notice[]>([]);
   const box = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
-    if (!session.token) return;
     try {
       const r = await request<Paged<Notice> & { unread: number }>(
         "/api/notifications?page_size=20",

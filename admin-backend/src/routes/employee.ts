@@ -79,6 +79,7 @@ router.post('/requests', async (req: Request, res: Response) => {
 router.get('/notifications/:userId', async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId);
   if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+  if (userId !== req.user?.id) return res.status(403).json({ error: 'You can only view your own notifications' });
 
   try {
     const result = await pool.request()
@@ -99,9 +100,12 @@ router.get('/notifications/:userId', async (req: Request, res: Response) => {
 // ── PATCH /api/employee/notifications/:id/read ───────────────────────────────
 router.patch('/notifications/:id/read', async (req: Request, res: Response) => {
   try {
-    await pool.request()
+    const result = await pool.request()
       .input('id', mssql.Int, +req.params.id)
-      .query(`UPDATE notifications SET is_read = 1 WHERE id = @id`);
+      .input('uid', mssql.Int, req.user!.id)
+      .query(`UPDATE notifications SET is_read = 1 OUTPUT inserted.id
+        WHERE id = @id AND user_id=@uid`);
+    if (!result.recordset[0]) return res.status(404).json({ error: 'Notification not found' });
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -116,25 +120,31 @@ router.patch('/requests/:id/cancel', async (req: Request, res: Response) => {
   const { note = 'Withdrawn by requester' } = req.body ?? {};
   if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
 
+  const tx = pool.transaction();
   try {
-    await pool.request()
+    await tx.begin();
+    const cancelled = await tx.request()
       .input('id', mssql.Int, reqId)
       .input('uid', mssql.Int, user_id)
       .query(`UPDATE requests SET status='rejected',workflow_status='withdrawn',updated_at=GETDATE()
-        WHERE id=@id AND user_id=@uid AND status IN ('pending','queued','info_requested')`);
-
-    if (user_id) {
-      await pool.request()
-        .input('request_id', mssql.Int, reqId)
-        .input('actor_id',   mssql.Int, user_id)
-        .input('action',     mssql.NVarChar, 'withdrawn')
-        .input('note',       mssql.NVarChar, note)
-        .query(`INSERT INTO approvals (request_id, actor_id, action, note) VALUES (@request_id, @actor_id, @action, @note)`);
-
-      clearCache(`employee:${user_id}:requests`, 'admin:stats', 'admin:requests:pending');
+        OUTPUT inserted.id WHERE id=@id AND user_id=@uid
+        AND status IN ('pending','queued','info_requested')`);
+    if (!cancelled.recordset[0]) {
+      await tx.rollback();
+      return res.status(409).json({ error: 'Request cannot be withdrawn' });
     }
+    await tx.request()
+      .input('request_id', mssql.Int, reqId)
+      .input('actor_id',   mssql.Int, user_id)
+      .input('action',     mssql.NVarChar, 'withdrawn')
+      .input('note',       mssql.NVarChar, note)
+      .query(`INSERT INTO approvals (request_id, actor_id, action, note)
+        VALUES (@request_id, @actor_id, @action, @note)`);
+    await tx.commit();
+    clearCache(`employee:${user_id}:requests`, 'admin:stats', 'admin:requests:pending');
     res.json({ success: true });
   } catch (err) {
+    try { await tx.rollback(); } catch { /* transaction already closed */ }
     console.error(err);
     res.status(500).json({ error: 'Cancel failed' });
   }

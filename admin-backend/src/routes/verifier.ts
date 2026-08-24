@@ -32,23 +32,27 @@ router.get('/queue', async (_req: Request, res: Response) => {
 
 // ── POST /api/verifier/requests/:id/verify ───────────────────────────────────
 router.post('/requests/:id/verify', async (req: Request, res: Response) => {
-  const { note = '', verifier_id = 9 } = req.body;
+  const { note = '' } = req.body ?? {};
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId)) return res.status(400).json({ error: 'Invalid request ID' });
   const tx = pool.transaction();
   try {
     await tx.begin();
 
-    await tx.request()
-      .input('id', mssql.Int, +req.params.id)
-      .query(`UPDATE requests SET status = 'approved', updated_at = GETDATE() WHERE id = @id`);
+    const updated = await tx.request()
+      .input('id', mssql.Int, requestId)
+      .query(`UPDATE requests SET status='approved',updated_at=GETDATE()
+        OUTPUT inserted.user_id,inserted.ref_id
+        WHERE id=@id AND status='awaiting_verification'`);
+    const { user_id: userId, ref_id: refId } = updated.recordset[0] ?? {};
+    if (!userId) {
+      await tx.rollback();
+      return res.status(409).json({ error: 'Request is not awaiting verification' });
+    }
 
-    const userRes = await tx.request()
-      .input('id', mssql.Int, +req.params.id)
-      .query(`SELECT user_id, ref_id FROM requests WHERE id = @id`);
-    const { user_id: userId, ref_id: refId } = userRes.recordset[0] ?? {};
-
     await tx.request()
-      .input('request_id', mssql.Int, +req.params.id)
-      .input('actor_id',   mssql.Int, verifier_id)
+      .input('request_id', mssql.Int, requestId)
+      .input('actor_id',   mssql.Int, req.user!.id)
       .input('note',       mssql.NVarChar, note || null)
       .query(`INSERT INTO approvals (request_id,actor_id,action,note) VALUES (@request_id,@actor_id,'verified',@note)`);
 
@@ -71,18 +75,25 @@ router.post('/requests/:id/verify', async (req: Request, res: Response) => {
 
 // ── POST /api/verifier/requests/:id/send-back ────────────────────────────────
 router.post('/requests/:id/send-back', async (req: Request, res: Response) => {
-  const { note = '', verifier_id = 9 } = req.body;
+  const { note = '' } = req.body ?? {};
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId)) return res.status(400).json({ error: 'Invalid request ID' });
   const tx = pool.transaction();
   try {
     await tx.begin();
 
-    await tx.request()
-      .input('id', mssql.Int, +req.params.id)
-      .query(`UPDATE requests SET status = 'pending', updated_at = GETDATE() WHERE id = @id`);
+    const updated = await tx.request()
+      .input('id', mssql.Int, requestId)
+      .query(`UPDATE requests SET status='pending',updated_at=GETDATE()
+        OUTPUT inserted.id WHERE id=@id AND status='awaiting_verification'`);
+    if (!updated.recordset[0]) {
+      await tx.rollback();
+      return res.status(409).json({ error: 'Request is not awaiting verification' });
+    }
 
     await tx.request()
-      .input('request_id', mssql.Int, +req.params.id)
-      .input('actor_id',   mssql.Int, verifier_id)
+      .input('request_id', mssql.Int, requestId)
+      .input('actor_id',   mssql.Int, req.user!.id)
       .input('note',       mssql.NVarChar, note || null)
       .query(`INSERT INTO approvals (request_id,actor_id,action,note) VALUES (@request_id,@actor_id,'sent_back',@note)`);
 

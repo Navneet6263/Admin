@@ -3,8 +3,10 @@ import mssql from "mssql";
 import { pool } from "../db";
 import { authorize } from "../services/policy";
 import { notify } from "../services/notifications";
+import { requireAssignedCenter } from "../auth";
 
 const router = Router();
+router.use(requireAssignedCenter);
 router.get("/", async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const size = Math.min(100, Math.max(10, Number(req.query.page_size) || 25));
@@ -84,11 +86,14 @@ router.post("/:requestId/update", async (req, res) => {
       .input("ref", mssql.NVarChar(150), b.transaction_ref || null)
       .input("notes", mssql.NVarChar(1000), b.notes || null)
       .input("actor", mssql.Int, user.id)
-      .query(`UPDATE payments SET actual_amount=@amount,vendor_name=@vendor,
+      .query(`SET XACT_ABORT ON; BEGIN TRANSACTION;
+        UPDATE payments SET actual_amount=@amount,vendor_name=@vendor,
         invoice_number=@invoice,invoice_url=@url,payment_method=@method,transaction_ref=@ref,notes=@notes,
         status='awaiting_verification',updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE request_id=@rid AND status='awaiting_update';
+        IF @@ROWCOUNT=0 THROW 50002,'Payment is not awaiting an update',1;
         UPDATE requests SET actual_amount=@amount,payment_status='awaiting_verification',updated_at=GETDATE() WHERE id=@rid;
-        INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_updated',@notes)`);
+        INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_updated',@notes);
+        COMMIT TRANSACTION;`);
     const finance = await pool
       .request()
       .query(
@@ -107,6 +112,8 @@ router.post("/:requestId/update", async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error(error);
+    if (error instanceof Error && error.message.includes('not awaiting an update'))
+      return res.status(409).json({ error: 'Payment was already updated' });
     res.status(500).json({ error: "Payment update failed" });
   }
 });
@@ -141,6 +148,7 @@ router.post("/:requestId/verify", async (req, res) => {
       .request()
       .input("rid", mssql.Int, id)
       .input("actor", mssql.Int, user.id).query(`
+      SET XACT_ABORT ON; BEGIN TRANSACTION;
       DECLARE @estimated DECIMAL(14,2),@actual DECIMAL(14,2),@cc NVARCHAR(10);
       SELECT @estimated=p.estimated_amount,@actual=p.actual_amount,@cc=r.charge_center_code
         FROM payments p WITH(UPDLOCK,ROWLOCK) JOIN requests r ON r.id=p.request_id
@@ -151,10 +159,13 @@ router.post("/:requestId/verify", async (req, res) => {
       UPDATE requests SET payment_status='paid',workflow_status='completed',updated_at=GETDATE() WHERE id=@rid;
       UPDATE center_budgets SET committed=CASE WHEN committed>=ISNULL(@estimated,0) THEN committed-ISNULL(@estimated,0) ELSE 0 END,
         spent=spent+@actual,updated_at=GETDATE() WHERE center_code=@cc AND month=MONTH(GETDATE()) AND year=YEAR(GETDATE());
-      INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_verified','Payment verified and closed')`);
+      INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_verified','Payment verified and closed');
+      COMMIT TRANSACTION;`);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
+    if (error instanceof Error && error.message.includes('not awaiting verification'))
+      return res.status(409).json({ error: 'Payment was already verified or is not ready' });
     res.status(500).json({ error: "Verification failed" });
   }
 });

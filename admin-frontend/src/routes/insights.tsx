@@ -12,6 +12,7 @@ import { getRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { buildHistory, buildHistoryFromAggregates, CATS, availableFinancialYears, financialYearLabel as formatFinancialYear, financialYearStartFor, type SpendHeatmapResponse } from "@/components/super-admin/shared";
 import { AnomaliesTab } from "@/components/super-admin/AnomaliesTab";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/insights")({
   head: () => ({
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/insights")({
       { name: "description", content: "Executive analytics for spend, categories, departments and approval velocity." },
     ],
   }),
-  component: Insights,
+  component: protectedRoute(Insights, ['admin', 'hq_admin', 'super_admin']),
 });
 
 function Insights() {

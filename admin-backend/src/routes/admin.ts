@@ -131,26 +131,26 @@ async function applyAction(
 
 // ── POST /api/admin/requests/:id/approve ────────────────────────────────────
 router.post('/requests/:id/approve', async (req: Request, res: Response) => {
-  const { remarks = '', admin_id = 7 } = req.body;
-  await applyAction(+req.params.id, admin_id, 'awaiting_verification', 'approved', remarks, res);
+  const { remarks = '' } = req.body ?? {};
+  await applyAction(+req.params.id, req.user!.id, 'awaiting_verification', 'approved', remarks, res);
 });
 
 // ── POST /api/admin/requests/:id/reject ─────────────────────────────────────
 router.post('/requests/:id/reject', async (req: Request, res: Response) => {
-  const { remarks = '', admin_id = 7 } = req.body;
-  await applyAction(+req.params.id, admin_id, 'rejected', 'rejected', remarks, res);
+  const { remarks = '' } = req.body ?? {};
+  await applyAction(+req.params.id, req.user!.id, 'rejected', 'rejected', remarks, res);
 });
 
 // ── POST /api/admin/requests/:id/queue ──────────────────────────────────────
 router.post('/requests/:id/queue', async (req: Request, res: Response) => {
-  const { remarks = '', admin_id = 7 } = req.body;
-  await applyAction(+req.params.id, admin_id, 'queued', 'queued', remarks, res);
+  const { remarks = '' } = req.body ?? {};
+  await applyAction(+req.params.id, req.user!.id, 'queued', 'queued', remarks, res);
 });
 
 // ── POST /api/admin/requests/:id/info ───────────────────────────────────────
 router.post('/requests/:id/info', async (req: Request, res: Response) => {
-  const { remarks = '', admin_id = 7 } = req.body;
-  await applyAction(+req.params.id, admin_id, 'info_requested', 'info_requested', remarks, res);
+  const { remarks = '' } = req.body ?? {};
+  await applyAction(+req.params.id, req.user!.id, 'info_requested', 'info_requested', remarks, res);
 });
 
 // ── GET /api/admin/requests/:id/audit ───────────────────────────────────────

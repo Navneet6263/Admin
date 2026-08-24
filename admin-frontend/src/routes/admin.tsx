@@ -13,6 +13,7 @@ import { TeamTab } from "@/components/super-admin/TeamTab";
 import { getPagedRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/admin")({
       { name: "description", content: "HQ request queue. Review, approve, reject and escalate to Super Admin." },
     ],
   }),
-  component: HqAdminConsole,
+  component: protectedRoute(HqAdminConsole, ['admin', 'hq_admin']),
 });
 
 type Tab = "inbox" | "queued" | "approved" | "rejected" | "all";

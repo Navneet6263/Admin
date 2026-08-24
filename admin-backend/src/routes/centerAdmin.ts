@@ -1,17 +1,20 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
 import { pool, clearCache, getCached, setCache } from '../db';
-import { requireAuth } from '../auth';
+import { requireAssignedCenter, requireAuth } from '../auth';
 import { chargeCenter } from './routingEngine';
 
 const router = Router();
 router.use(requireAuth('center_admin', 'super_admin'));
+router.use(requireAssignedCenter);
 router.use(['/requests/:id/approve','/requests/:id/reject'], (_req, res) =>
   res.status(410).json({ error: 'Legacy action retired; use /api/workflow' }));
 
 // ── GET /api/center-admin/requests?status=pending ────────────
 router.get('/requests', async (req: Request, res: Response) => {
-  const centerCode = req.user?.center_code || String(req.query.center_code || '');
+  const centerCode = req.user?.role === 'super_admin'
+    ? String(req.query.center_code || '')
+    : req.user?.center_code || '';
   if (!centerCode) return res.status(400).json({ error: 'A center assignment is required' });
   const status     = (req.query.status as string) || 'pending';
 
@@ -45,7 +48,9 @@ router.get('/requests', async (req: Request, res: Response) => {
 
 // ── GET /api/center-admin/budget ─────────────────────────────
 router.get('/budget', async (req: Request, res: Response) => {
-  const centerCode = req.user?.center_code || String(req.query.center_code || '');
+  const centerCode = req.user?.role === 'super_admin'
+    ? String(req.query.center_code || '')
+    : req.user?.center_code || '';
   if (!centerCode) return res.status(400).json({ error: 'A center assignment is required' });
 
   try {
@@ -73,7 +78,9 @@ router.get('/budget', async (req: Request, res: Response) => {
 
 // ── GET /api/center-admin/stats ───────────────────────────────
 router.get('/stats', async (req: Request, res: Response) => {
-  const centerCode = req.user?.center_code || String(req.query.center_code || '');
+  const centerCode = req.user?.role === 'super_admin'
+    ? String(req.query.center_code || '')
+    : req.user?.center_code || '';
   if (!centerCode) return res.status(400).json({ error: 'A center assignment is required' });
 
   try {

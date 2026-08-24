@@ -8,6 +8,7 @@ import { priorityRank, typeLabels, type Priority, type RequestItem, type Request
 import { typeIcon } from "@/components/requestMeta";
 import { getRequests, request, session } from "@/lib/api";
 import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles, AlertTriangle, X } from "lucide-react";
+import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/employee")({
   head: () => ({
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/employee")({
       { name: "description", content: "Employee workspace to raise, track and manage admin requests." },
     ],
   }),
-  component: EmployeeConsole,
+  component: protectedRoute(EmployeeConsole, ['employee']),
 });
 
 type Tab = "active" | "approved" | "rejected" | "all";
