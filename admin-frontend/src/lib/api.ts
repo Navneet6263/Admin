@@ -51,10 +51,15 @@ export const session = {
 };
 
 export async function request<T>(path: string, init: { method?: string; body?: unknown } = {}, authenticate = true): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: init.method ?? 'GET', headers: { 'Content-Type': 'application/json', ...(authenticate && session.token ? { Authorization: `Bearer ${session.token}` } : {}) },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: init.method ?? 'GET', headers: { 'Content-Type': 'application/json', ...(authenticate && session.token ? { Authorization: `Bearer ${session.token}` } : {}) },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    });
+  } catch {
+    throw new Error('RequestHub server is unavailable. Please start the backend and try again.');
+  }
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 && authenticate) {
     session.clear();

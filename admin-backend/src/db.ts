@@ -143,14 +143,17 @@ async function runMigrations() {
   }
 }
 
-export async function connectDB() {
+export async function connectDB(): Promise<boolean> {
   try {
     await pool.connect();
     dbConnected = true;
     console.log('✅ SQL Server connected');
     await runMigrations();
+    return true;
   } catch (err) {
+    dbConnected = false;
     console.error('❌ DB connection failed:', err);
+    return false;
   }
 }
 

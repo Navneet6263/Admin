@@ -53,8 +53,10 @@ app.get('/health', (_req, res) =>
 
 const PORT = Number(process.env.PORT) || 3001;
 
-connectDB().then(() => {
+app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
+
+void connectDB().then((connected) => {
+  if (!connected) return;
   void createPaymentReminders().catch(console.error);
   setInterval(() => void createPaymentReminders().catch(console.error), 60_000).unref();
-  app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`))
 });
