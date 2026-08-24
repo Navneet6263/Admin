@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { request } from '@/lib/api';
+import { request, session } from '@/lib/api';
 
 export const INVENTORY_CATEGORIES = ['Adhesive', 'Art Material', 'Battery', 'Correction', 'Cutting', 'Desk Accessories',
   'Desk Organizer', 'Diary', 'Filing', 'Labels', 'Mailing', 'Marker', 'Measuring', 'Notes', 'Office Equipment',
@@ -11,15 +11,19 @@ export type MovementSource = 'seed' | 'restock' | 'add_item' | 'adjustment' | 'r
 export interface StockMovement { id: string; at: string; sku: string; name: string; category: InventoryItem['category']; direction: MovementDirection; qty: number; balanceAfter: number; source: MovementSource; refId?: string; actor?: string; note?: string; }
 
 let items: InventoryItem[] = [], movements: StockMovement[] = [];
+const movementRoles = new Set(['hq_admin', 'admin', 'center_admin', 'verifier', 'finance', 'finance_head', 'super_admin']);
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach(listener => listener());
 const asItem = (row: Record<string, unknown>): InventoryItem => ({ sku: String(row.sku), name: String(row.name), category: row.category as InventoryItem['category'], unit: String(row.unit), price: Number(row.price ?? 0), qty: Number(row.qty ?? 0), threshold: Number(row.threshold ?? 0) });
 const asMovement = (row: Record<string, unknown>): StockMovement => ({ id: String(row.id), sku: String(row.sku), name: String(row.name), category: row.category as InventoryItem['category'], direction: row.direction as MovementDirection, qty: Number(row.qty), balanceAfter: Number(row.balance_after), source: row.source as MovementSource, refId: row.ref_id ? String(row.ref_id) : undefined, actor: row.actor ? String(row.actor) : undefined, note: row.note ? String(row.note) : undefined, at: String(row.created_at) });
 async function refresh() {
   try {
+    const canViewMovements = movementRoles.has(session.user?.role ?? '');
     const [stockRes, historyRes] = await Promise.allSettled([
       request<Record<string, unknown>[]>('/api/inventory'),
-      request<Record<string, unknown>[]>('/api/inventory/movements')
+      canViewMovements
+        ? request<Record<string, unknown>[]>('/api/inventory/movements')
+        : Promise.resolve([])
     ]);
     if (stockRes.status === 'fulfilled') items = stockRes.value.map(asItem);
     if (historyRes.status === 'fulfilled') movements = historyRes.value.map(asMovement);
