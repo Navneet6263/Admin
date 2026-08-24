@@ -1,6 +1,7 @@
 import type { AuditEntry, RequestItem } from '@/components/models';
 
-const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const configuredBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
+const baseUrl = configuredBaseUrl || (import.meta.env.DEV ? 'http://localhost:3001' : '');
 const tokenKey = 'requesthub.token';
 export type SessionUser = {
   id: number;

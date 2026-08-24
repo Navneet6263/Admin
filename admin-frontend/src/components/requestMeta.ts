@@ -48,10 +48,13 @@ export function relTime(iso: string) {
   const diff = Date.now() - date.getTime();
   if (diff < 0) return "Just now";
   const h = Math.floor(diff / 3_600_000);
-  if (h < 1) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`;
-  if (h < 24) return `${h}h ago`;
+  if (h < 1) {
+    const minutes = Math.max(1, Math.floor(diff / 60_000));
+    return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  }
+  if (h < 24) return `${h} ${h === 1 ? "hour" : "hours"} ago`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d} ${d === 1 ? "day" : "days"} ago`;
 }
 
 export function fmtDateTime(iso: string) {
