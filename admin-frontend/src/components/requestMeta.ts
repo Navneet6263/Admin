@@ -28,6 +28,7 @@ export const statusTone: Record<RequestStatus, { text: string; bg: string; label
   approved:              { text: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100", label: "Verified · Closed" },
   rejected:              { text: "text-rose-700",    bg: "bg-rose-50 border-rose-100",       label: "Rejected" },
   info_requested:        { text: "text-slate-700",   bg: "bg-slate-100 border-slate-200",    label: "Info Requested" },
+  withdrawn:             { text: "text-orange-700",  bg: "bg-orange-50 border-orange-100",   label: "Withdrawn" },
 };
 
 function parseLocalDate(iso: string): Date {

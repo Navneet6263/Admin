@@ -3,6 +3,8 @@ import { RequestRow } from "@/components/RequestRow";
 import { RequestDetail } from "@/components/RequestDetail";
 import { useCompanies } from "@/lib/directory";
 import { type RequestItem, type RequestStatus } from "@/components/models";
+import { PaginationBar } from "@/components/PaginationBar";
+import { useEffect, useMemo, useState } from "react";
 
 interface Props {
   list: RequestItem[];
@@ -20,13 +22,22 @@ export function OverrideTab({
   statusFilter, setStatusFilter, onSelect, onAction,
 }: Props) {
   const companies = useCompanies();
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  useEffect(() => { setPage(1); }, [companyFilter, statusFilter]);
+  const paged = useMemo(() => list.slice((page - 1) * pageSize, page * pageSize), [list, page]);
+  const changePage = (next: number) => {
+    setPage(next);
+    const first = list[(next - 1) * pageSize];
+    if (first) onSelect(first.id);
+  };
   return (
     <div className="max-w-[1400px] mx-auto">
       <div className="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-md flex items-start gap-2">
         <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
         <div className="text-xs text-indigo-900">
-          <b>Override authority.</b> You can force any request into any state — force-approve, force-reject, close, or send back to Admin.
-          Every action is signed with the authenticated Super Admin identity and appears in the audit trail.
+          <b>Controlled authority.</b> A Super Admin approval completes the operational request immediately.
+          Every action is signed with the authenticated identity and appears in the audit trail.
         </div>
       </div>
 
@@ -44,21 +55,22 @@ export function OverrideTab({
               <option value="all">Any status</option>
               <option value="pending">Pending</option>
               <option value="queued">Queued</option>
-              <option value="awaiting_verification">Awaiting verification</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
               <option value="info_requested">Info requested</option>
+              <option value="withdrawn">Withdrawn</option>
             </select>
             <span className="text-[11px] text-slate-400 tabular-nums ml-auto">{list.length} requests</span>
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
             {list.length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-400">No requests match.</div>
-            ) : list.map(r => (
+            ) : paged.map(r => (
               <RequestRow key={r.id} request={r} selected={selected?.id === r.id}
                 checked={false} onToggleCheck={() => {}} onSelect={onSelect} />
             ))}
           </div>
+          <PaginationBar page={page} pageSize={pageSize} total={list.length} onPageChange={changePage} />
         </div>
 
         {/* Right — detail panel */}
@@ -76,7 +88,7 @@ export function OverrideTab({
                 <span className="text-[10px] uppercase tracking-widest text-slate-500 mr-1">Quick override:</span>
                 <button onClick={() => onAction(selected.id, "approve", "")}
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-700">
-                  <CheckCircle2 className="w-3 h-3" /> Force approve
+                  <CheckCircle2 className="w-3 h-3" /> Approve via workflow
                 </button>
                 <button onClick={() => onAction(selected.id, "reject", "Overridden by Super Admin")}
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-rose-600 text-white rounded hover:bg-rose-700">

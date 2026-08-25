@@ -21,7 +21,7 @@ export const Route = createFileRoute("/insights")({
       { name: "description", content: "Executive analytics for spend, categories, departments and approval velocity." },
     ],
   }),
-  component: protectedRoute(Insights, ['admin', 'hq_admin', 'super_admin']),
+  component: protectedRoute(Insights, ['hq_admin', 'super_admin']),
 });
 
 function Insights() {

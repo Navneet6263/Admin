@@ -4,6 +4,8 @@ import {
   TypeFilter, PriorityFilter, CompanyFilter, SortFilter, AgeFilter, type SortKey, type AgeFilterKey,
 } from "@/components/hq-admin/AdminFilters";
 import type { RequestItem, RequestType, Priority } from "@/components/models";
+import { PaginationBar } from "@/components/PaginationBar";
+import { PackageCheck } from "lucide-react";
 
 interface Props {
   filtered: RequestItem[];
@@ -15,6 +17,10 @@ interface Props {
   ageFilter: AgeFilterKey;
   sortBy: SortKey;
   query: string;
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
   onTypeFilter: (v: RequestType | "all") => void;
   onPriorityFilter: (v: Priority | "all") => void;
   onCompanyFilter: (v: string) => void;
@@ -27,15 +33,17 @@ interface Props {
   onClearChecked: () => void;
   onBatchQueue: () => void;
   onBatchApprove: () => void;
+  onAssign: (request: RequestItem) => void;
   onDetailAction: (id: string, action: "approve" | "reject" | "queue" | "info" | "verify" | "send_back", note: string) => void;
 }
 
 export function HqQueuePanel({
   filtered, selected, checked,
   typeFilter, priorityFilter, companyFilter, ageFilter, sortBy, query,
+  page, pageSize, total, onPageChange,
   onTypeFilter, onPriorityFilter, onCompanyFilter, onAgeFilter, onSortBy, onQuery,
   onToggleAll, onToggleCheck, onSelect, onClearChecked,
-  onBatchQueue, onBatchApprove, onDetailAction,
+  onBatchQueue, onBatchApprove, onAssign, onDetailAction,
 }: Props) {
   const actionable = filtered.filter((request) => request.canAct);
   return (
@@ -96,14 +104,24 @@ export function HqQueuePanel({
             />
           ))}
         </div>
+        <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={onPageChange} />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+        {selected?.fulfillmentStatus === 'ready_to_assign' && <div className="border-b border-cyan-100 bg-cyan-50 p-3">
+          <button type="button" onClick={() => onAssign(selected)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-cyan-700">
+            <PackageCheck className="h-4 w-4" /> Mark item as handed over
+          </button>
+          <p className="mt-1.5 text-center text-[10px] text-cyan-700">Applicable inventory was deducted at approval. Confirm after giving it to the employee.</p>
+        </div>}
+        <div className="min-h-0 flex-1 overflow-hidden">
         {selected ? (
           <RequestDetail request={selected} onAction={onDetailAction} readOnly={!selected.canAct} />
         ) : (
           <div className="h-full grid place-items-center text-sm text-slate-400">Select a request to review.</div>
         )}
+        </div>
       </div>
     </div>
   );

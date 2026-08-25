@@ -5,7 +5,6 @@ import { pool } from './db';
 
 export type Role =
   | 'employee'
-  | 'admin'          // legacy alias of hq_admin
   | 'hq_admin'
   | 'center_admin'
   | 'finance'
@@ -42,9 +41,9 @@ const cookieOptions: CookieOptions = {
   maxAge: 8 * 60 * 60 * 1000,
 };
 
-/** Normalize legacy `admin` → `hq_admin` for permission checks. */
+/** Kept as a single permission-normalization hook for route services. */
 export function effectiveRole(role: Role): Role {
-  return role === 'admin' ? 'hq_admin' : role;
+  return role;
 }
 
 function cookieToken(req: Request) {
@@ -101,8 +100,7 @@ export function clearSessionCookie(res: Response) {
 
 function roleAllowed(userRole: Role, allowed: Role[]): boolean {
   if (userRole === 'super_admin') return true;
-  const eff = effectiveRole(userRole);
-  return allowed.some((r) => effectiveRole(r) === eff || r === userRole);
+  return allowed.includes(userRole);
 }
 
 export function requireAuth(...roles: Role[]) {

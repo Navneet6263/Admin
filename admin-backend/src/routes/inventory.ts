@@ -6,7 +6,7 @@ import { INVENTORY_CATEGORIES } from '../migrations/inventoryCatalog';
 
 const router = Router();
 const categories = new Set([...INVENTORY_CATEGORIES, 'Printing', 'Desk', 'Misc']);
-const managers = requireAuth('center_admin', 'hq_admin', 'admin', 'super_admin');
+const managers = requireAuth('center_admin', 'hq_admin', 'super_admin');
 
 router.get('/', async (req, res) => {
   const fields = req.user?.role === 'employee' ? 'sku,name,category,unit' : 'sku,name,category,unit,price,qty,threshold,updated_at';
@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
   catch (error) { console.error(error); res.status(500).json({ error: 'Inventory query failed' }); }
 });
 
-router.get('/movements', requireAuth('hq_admin', 'admin', 'center_admin', 'verifier', 'finance', 'finance_head', 'super_admin'), async (req, res) => {
+router.get('/movements', requireAuth('hq_admin', 'center_admin', 'verifier', 'finance', 'finance_head', 'super_admin'), async (req, res) => {
   try { res.json((await pool.request().input('sku', mssql.NVarChar(30), req.query.sku || null).query(`
     SELECT TOP 200 m.id,m.sku,i.name,i.category,m.direction,m.qty,m.balance_after,m.source,m.ref_id,m.actor,m.note,m.created_at
     FROM stock_movements m JOIN inventory i ON i.sku=m.sku WHERE @sku IS NULL OR m.sku=@sku ORDER BY m.created_at DESC`)).recordset); }

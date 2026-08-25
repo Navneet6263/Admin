@@ -19,8 +19,6 @@ export type CreatedRequest = Record<string, unknown> & {
   deduplicated: boolean;
   homeCenter: string;
   requestCenter: string;
-  approvalRole: string;
-  approvalUserId: number | null;
 };
 
 export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<CreatedRequest> {
@@ -44,10 +42,7 @@ export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<
           WHERE user_id=@uid AND client_request_id=@clientKey;
         IF @existing IS NOT NULL BEGIN
           SELECT r.*,CAST(1 AS bit) deduplicated,r.home_center_code homeCenter,
-            r.request_center_code requestCenter,a.role approvalRole,a.user_id approvalUserId
-          FROM requests r OUTER APPLY (SELECT TOP 1 role,user_id FROM request_assignments
-            WHERE request_id=r.id AND is_active=1 AND assignment_type='owner' ORDER BY id DESC) a
-          WHERE r.id=@existing;
+            r.request_center_code requestCenter FROM requests r WHERE r.id=@existing;
           COMMIT TRANSACTION;
           RETURN;
         END;
@@ -82,16 +77,14 @@ export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<
           OR NULLIF(JSON_VALUE(@details,'$.employeeCode'),'') IS NULL OR NOT EXISTS(
             SELECT 1 FROM OPENJSON(@details) WITH(photoDataUrl NVARCHAR(MAX) '$.photoDataUrl') WHERE NULLIF(photoDataUrl,'') IS NOT NULL))
           THROW 51006,'Complete the Vision India ID-card preview before submitting',1;
-        DECLARE @ownerRole NVARCHAR(30),@ownerUser INT;
-        IF @type='visiting_card' SET @ownerRole='center_admin';
-        ELSE SELECT TOP 1 @ownerRole=role,@ownerUser=user_id FROM approval_policies
-          WHERE is_active=1 AND can_approve=1 AND (category=@type OR category IS NULL)
-          AND (center_code=@center OR center_code IS NULL) AND (max_amount IS NULL OR max_amount>=ISNULL(@amount,0))
-          AND (user_id IS NULL OR EXISTS(SELECT 1 FROM users WHERE id=approval_policies.user_id AND is_active=1))
-          ORDER BY CASE role WHEN 'center_admin' THEN 1 WHEN 'hq_admin' THEN 2 WHEN 'super_admin' THEN 3 ELSE 9 END,
-            CASE WHEN user_id IS NOT NULL THEN 0 ELSE 1 END,CASE WHEN center_code=@center THEN 1 ELSE 2 END;
-        SET @ownerRole=COALESCE(@ownerRole,'super_admin');
-
+        IF @type='id_card' BEGIN
+          DECLARE @phone NVARCHAR(30)=JSON_VALUE(@details,'$.phone'),
+            @emergencyPhone NVARCHAR(30)=JSON_VALUE(@details,'$.emergencyPhone');
+          IF LEN(ISNULL(@phone,''))<>10 OR @phone LIKE '%[^0-9]%' OR LEFT(@phone,1) NOT IN('6','7','8','9')
+            THROW 51007,'Enter a valid 10-digit Indian contact number',1;
+          IF LEN(ISNULL(@emergencyPhone,''))<>10 OR @emergencyPhone LIKE '%[^0-9]%' OR LEFT(@emergencyPhone,1) NOT IN('6','7','8','9')
+            THROW 51008,'Enter a valid 10-digit Indian emergency number',1;
+        END;
         DECLARE @payment NVARCHAR(30)=CASE WHEN @type IN
           ('stationery','travel','courier','fooding','meeting_room','visiting_card','id_card')
           THEN 'pending_approval' ELSE 'not_required' END;
@@ -101,14 +94,16 @@ export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<
         VALUES(@uid,@company,@team,@type,@subject,@description,@amount,@priority,@details,
           @home,@home,@center,@center,@home,@home,'awaiting_approval',@payment,@clientKey);
         DECLARE @id INT=CONVERT(INT,SCOPE_IDENTITY());
-        INSERT INTO request_assignments(request_id,center_code,role,user_id,assignment_type,can_act)
-          VALUES(@id,@center,@ownerRole,@ownerUser,'owner',1);
+        INSERT INTO request_assignments(request_id,center_code,role,assignment_type,can_act) VALUES
+          (@id,@center,'center_admin','owner',1),
+          (@id,NULL,'hq_admin','owner',1),
+          (@id,NULL,'super_admin','owner',1);
         IF @home<>@center INSERT INTO request_assignments(request_id,center_code,role,assignment_type,can_act)
           VALUES(@id,@home,'center_admin','watcher',0);
         INSERT INTO approvals(request_id,actor_id,action,note)
           VALUES(@id,@uid,'raised','Request raised by employee');
-        SELECT r.*,CAST(0 AS bit) deduplicated,@home homeCenter,@center requestCenter,
-          @ownerRole approvalRole,@ownerUser approvalUserId FROM requests r WHERE r.id=@id;
+        SELECT r.*,CAST(0 AS bit) deduplicated,@home homeCenter,@center requestCenter
+          FROM requests r WHERE r.id=@id;
         COMMIT TRANSACTION;
       END TRY
       BEGIN CATCH

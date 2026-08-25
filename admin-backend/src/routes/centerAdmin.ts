@@ -5,6 +5,8 @@ import { requireAssignedCenter, requireAuth } from '../auth';
 import { chargeCenter } from './routingEngine';
 
 const router = Router();
+router.use(['/requests/:id/approve','/requests/:id/reject'], (_req, res) =>
+  res.status(410).json({ error: 'Legacy action retired; use /api/workflow' }));
 router.use(requireAuth('center_admin', 'super_admin'));
 router.use(requireAssignedCenter);
 router.use(['/requests/:id/approve','/requests/:id/reject'], (_req, res) =>

@@ -14,13 +14,17 @@ router.get('/public', async (_req: Request, res: Response) => {
 });
 
 // ── GET /api/centers — Fetch all centers with employee counts ────────────────
-router.get('/', requireAuth('center_admin', 'hq_admin', 'admin', 'super_admin'), async (_req: Request, res: Response) => {
+router.get('/', requireAuth('center_admin', 'hq_admin', 'super_admin'), async (req: Request, res: Response) => {
   const cacheKey = 'centers:all';
-  const cached = getCached<unknown[]>(cacheKey);
+  const isGlobal = req.user!.role !== 'center_admin';
+  const cached = isGlobal ? getCached<unknown[]>(cacheKey) : null;
   if (cached) return res.json(cached);
 
   try {
-    const result = await pool.request().query(`
+    const result = await pool.request()
+      .input('uid', mssql.Int, req.user!.id)
+      .input('role', mssql.NVarChar(30), req.user!.role)
+      .input('home', mssql.NVarChar(10), req.user!.center_code || null).query(`
       SELECT 
         c.id, c.code, c.name, c.city, c.company, c.is_active, c.created_at,
         COUNT(uc.user_id) AS user_count,
@@ -29,10 +33,12 @@ router.get('/', requireAuth('center_admin', 'hq_admin', 'admin', 'super_admin'),
       FROM centers c
       LEFT JOIN user_centers uc ON c.code = uc.home_center_code
       LEFT JOIN center_budgets cb ON c.code = cb.center_code AND cb.month = MONTH(GETDATE()) AND cb.year = YEAR(GETDATE())
+      WHERE @role<>'center_admin' OR c.code=@home OR EXISTS(SELECT 1 FROM admin_center_access a
+        WHERE a.user_id=@uid AND a.center_code=c.code AND a.is_active=1)
       GROUP BY c.id, c.code, c.name, c.city, c.company, c.is_active, c.created_at, cb.allocated, cb.spent
       ORDER BY c.code ASC
     `);
-    setCache(cacheKey, result.recordset);
+    if (isGlobal) setCache(cacheKey, result.recordset);
     res.json(result.recordset);
   } catch (err) {
     console.error(err);

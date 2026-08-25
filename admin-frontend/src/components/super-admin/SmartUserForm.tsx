@@ -41,8 +41,8 @@ const ROLE_CARDS = [
   },
   {
     role: 'verifier',
-    label: 'Verifier',
-    sub: 'Stage-2 bill & claim verification before finance release.',
+    label: 'Audit Reviewer',
+    sub: 'Read-only access to historical verification and audit records.',
     icon: '🔍',
     color: 'violet',
     border: 'border-violet-200 bg-violet-50',
@@ -51,7 +51,7 @@ const ROLE_CARDS = [
   {
     role: 'finance',
     label: 'Finance Executive',
-    sub: 'Routine payment updates and verification within policy limits.',
+    sub: 'Reviews recorded expenses after operations are already complete.',
     icon: '💰',
     color: 'emerald',
     border: 'border-emerald-200 bg-emerald-50',
@@ -60,7 +60,7 @@ const ROLE_CARDS = [
   {
     role: 'finance_head',
     label: 'Head Finance',
-    sub: 'High-value verification, exceptions and financial analytics.',
+    sub: 'Final expense confirmation, exceptions and financial analytics.',
     icon: '₹', color: 'teal', border: 'border-teal-200 bg-teal-50',
     active: 'border-teal-500 bg-teal-100 ring-2 ring-teal-300',
   },

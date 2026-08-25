@@ -3,7 +3,7 @@ import mssql from "mssql";
 import { pool } from "../db";
 import { authorize } from "../services/policy";
 import { notify } from "../services/notifications";
-import { requireAssignedCenter } from "../auth";
+import { requireAssignedCenter, requireAuth } from "../auth";
 
 const router = Router();
 router.use(requireAssignedCenter);
@@ -46,7 +46,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/:requestId/update", async (req, res) => {
+router.post("/:requestId/update", requireAuth("finance", "finance_head", "super_admin"), async (req, res) => {
   const id = Number(req.params.requestId);
   const user = req.user!;
   const b = req.body ?? {};
@@ -59,14 +59,6 @@ router.post("/:requestId/update", async (req, res) => {
       .query(`SELECT type,approval_center_code FROM requests WHERE id=@id`);
     const row = lookup.recordset[0];
     if (!row) return res.status(404).json({ error: "Request not found" });
-    if (
-      ["center_admin", "hq_admin", "admin"].includes(user.role) &&
-      user.center_code &&
-      user.center_code !== row.approval_center_code
-    )
-      return res
-        .status(403)
-        .json({ error: "Request belongs to another handling center" });
     const access = await authorize(
       user,
       "can_update_payment",
@@ -87,11 +79,23 @@ router.post("/:requestId/update", async (req, res) => {
       .input("notes", mssql.NVarChar(1000), b.notes || null)
       .input("actor", mssql.Int, user.id)
       .query(`SET XACT_ABORT ON; BEGIN TRANSACTION;
+        DECLARE @cc NVARCHAR(10),@booked BIT;
+        SELECT @cc=r.charge_center_code,@booked=p.expense_booked FROM payments p WITH(UPDLOCK,ROWLOCK)
+          JOIN requests r ON r.id=p.request_id WHERE p.request_id=@rid AND p.status='awaiting_update';
+        IF @cc IS NULL THROW 50002,'Payment is not awaiting an update',1;
         UPDATE payments SET actual_amount=@amount,vendor_name=@vendor,
         invoice_number=@invoice,invoice_url=@url,payment_method=@method,transaction_ref=@ref,notes=@notes,
-        status='awaiting_verification',updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE request_id=@rid AND status='awaiting_update';
-        IF @@ROWCOUNT=0 THROW 50002,'Payment is not awaiting an update',1;
+        status='awaiting_verification',expense_booked=1,updated_by=@actor,updated_at=SYSUTCDATETIME()
+          WHERE request_id=@rid AND status='awaiting_update';
         UPDATE requests SET actual_amount=@amount,payment_status='awaiting_verification',updated_at=GETDATE() WHERE id=@rid;
+        IF ISNULL(@booked,0)=0 BEGIN
+          IF NOT EXISTS(SELECT 1 FROM center_budgets WHERE center_code=@cc
+            AND month=MONTH(GETDATE()) AND year=YEAR(GETDATE()))
+            INSERT INTO center_budgets(center_code,month,year,allocated,committed,spent)
+              VALUES(@cc,MONTH(GETDATE()),YEAR(GETDATE()),0,0,0);
+          UPDATE center_budgets SET spent=spent+@amount,updated_at=GETDATE()
+            WHERE center_code=@cc AND month=MONTH(GETDATE()) AND year=YEAR(GETDATE());
+        END;
         INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_updated',@notes);
         COMMIT TRANSACTION;`);
     const finance = await pool
@@ -118,7 +122,7 @@ router.post("/:requestId/update", async (req, res) => {
   }
 });
 
-router.post("/:requestId/verify", async (req, res) => {
+router.post("/:requestId/verify", requireAuth("finance", "finance_head", "super_admin"), async (req, res) => {
   const id = Number(req.params.requestId);
   const user = req.user!;
   try {
@@ -149,15 +153,16 @@ router.post("/:requestId/verify", async (req, res) => {
       .input("rid", mssql.Int, id)
       .input("actor", mssql.Int, user.id).query(`
       SET XACT_ABORT ON; BEGIN TRANSACTION;
-      DECLARE @estimated DECIMAL(14,2),@actual DECIMAL(14,2),@cc NVARCHAR(10);
-      SELECT @estimated=p.estimated_amount,@actual=p.actual_amount,@cc=r.charge_center_code
+      DECLARE @estimated DECIMAL(14,2),@actual DECIMAL(14,2),@cc NVARCHAR(10),@booked BIT;
+      SELECT @estimated=p.estimated_amount,@actual=p.actual_amount,@cc=r.charge_center_code,@booked=p.expense_booked
         FROM payments p WITH(UPDLOCK,ROWLOCK) JOIN requests r ON r.id=p.request_id
         WHERE p.request_id=@rid AND p.status='awaiting_verification';
       IF @actual IS NULL THROW 50001,'Payment is not awaiting verification',1;
       UPDATE payments SET status='paid',verified_by=@actor,verified_at=SYSUTCDATETIME(),
         paid_at=COALESCE(paid_at,SYSUTCDATETIME()),updated_at=SYSUTCDATETIME() WHERE request_id=@rid;
       UPDATE requests SET payment_status='paid',workflow_status='completed',updated_at=GETDATE() WHERE id=@rid;
-      UPDATE center_budgets SET committed=CASE WHEN committed>=ISNULL(@estimated,0) THEN committed-ISNULL(@estimated,0) ELSE 0 END,
+      IF ISNULL(@booked,0)=0 UPDATE center_budgets SET
+        committed=CASE WHEN committed>=ISNULL(@estimated,0) THEN committed-ISNULL(@estimated,0) ELSE 0 END,
         spent=spent+@actual,updated_at=GETDATE() WHERE center_code=@cc AND month=MONTH(GETDATE()) AND year=YEAR(GETDATE());
       INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@rid,@actor,'payment_verified','Payment verified and closed');
       COMMIT TRANSACTION;`);

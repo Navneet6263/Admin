@@ -46,7 +46,9 @@ export async function notifyRole(
     .query(
       `INSERT INTO notifications(user_id,message,kind,action_url,dedupe_key)
        SELECT u.id,@message,@kind,@url,CONCAT(@prefix,':',u.id) FROM users u
-       WHERE u.is_active=1 AND u.role=@role AND (@center IS NULL OR u.center_code=@center)
+       WHERE u.is_active=1 AND u.role=@role
+       AND (@center IS NULL OR u.center_code=@center OR (@role='center_admin' AND EXISTS(
+         SELECT 1 FROM admin_center_access a WHERE a.user_id=u.id AND a.center_code=@center AND a.is_active=1)))
        AND NOT EXISTS(SELECT 1 FROM notifications n WHERE n.dedupe_key=CONCAT(@prefix,':',u.id))`,
     ));
 }
@@ -57,11 +59,8 @@ export async function createPaymentReminders() {
     FROM payments p JOIN requests r ON r.id=p.request_id
     WHERE p.status='awaiting_update' AND p.due_at<=SYSUTCDATETIME()`));
   for (const row of due.recordset) {
-    const admins = await withDbRetry(() => pool
-      .request()
-      .input("cc", mssql.NVarChar(10), row.approval_center_code)
-      .query(`SELECT id FROM users WHERE is_active=1 AND role IN('center_admin','hq_admin','super_admin')
-        AND (role='super_admin' OR center_code=@cc)`));
+    const admins = await withDbRetry(() => pool.request()
+      .query(`SELECT id FROM users WHERE is_active=1 AND role IN('finance','finance_head')`));
     await Promise.all(
       admins.recordset.map((u) =>
         notify({

@@ -21,7 +21,6 @@ export function AnalyticsTab({ requests, history, centerCode = "" }: { requests:
   const funnel = [
     { s: "Created",               n: requests.length,                                                                           tone: "bg-slate-500" },
     { s: "Pending admin",         n: requests.filter(r => r.status === "pending" || r.status === "info_requested").length,      tone: "bg-amber-500" },
-    { s: "Awaiting verification", n: requests.filter(r => r.status === "awaiting_verification").length,                         tone: "bg-violet-500" },
     { s: "Approved & closed",     n: requests.filter(r => r.status === "approved").length,                                      tone: "bg-emerald-500" },
     { s: "Rejected",              n: requests.filter(r => r.status === "rejected").length,                                      tone: "bg-rose-500" },
   ];

@@ -41,17 +41,17 @@ export function visionIndiaIdCardSvg(side: IdCardSide, details: IdCardDetails) {
     <path d="M165 0h375v92H250c-50 0-85-42-85-92z" fill="url(#red)"/><g transform="translate(40 112)">${logo}</g>
     <rect x="170" y="225" width="200" height="235" rx="4" fill="#8f8f8f"/>
     ${details.photoDataUrl ? `<image href="${xml(details.photoDataUrl)}" x="170" y="225" width="200" height="235" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>` : `<text x="270" y="350" text-anchor="middle" fill="#fff" font-family="Arial" font-size="20">PHOTO</text>`}
-    <g font-family="Arial,sans-serif" fill="#111" font-size="25"><text x="65" y="535" font-weight="700">Name :</text><text>${tspans(details.name, 245, 535)}</text>
-    <text x="65" y="615" font-weight="700">Employee Code :</text><text x="285" y="615">${xml(details.employeeCode)}</text>
-    <text x="65" y="675" font-weight="700">Designation :</text><text>${tspans(details.designation, 245, 675)}</text>
-    <text x="65" y="755" font-weight="700">Department :</text><text>${tspans(details.department, 245, 755)}</text></g>`);
+    <g font-family="Arial,sans-serif" fill="#111" font-size="23"><text x="65" y="520" font-weight="700">Name :</text><text>${tspans(details.name, 245, 520)}</text>
+    <text x="65" y="585" font-weight="700">Employee Code :</text><text x="285" y="585">${xml(details.employeeCode)}</text>
+    <text x="65" y="645" font-weight="700">Designation :</text><text>${tspans(details.designation, 245, 645)}</text>
+    <text x="65" y="715" font-weight="700">Department :</text><text>${tspans(details.department, 245, 715)}</text></g>`);
   return base(`
     <g transform="translate(52 120) scale(.9)">${logo}</g>
     <g font-family="Arial,sans-serif" fill="#151515"><text x="80" y="310" font-size="27">Vision India Services Pvt Ltd</text>
     <text x="80" y="352" font-size="22">A-11, Sector - 67, Noida - 201301</text>
-    <text x="80" y="410" font-size="22">Contact no.</text><text x="285" y="410" font-size="22">: ${xml(details.phone)}</text>
-    <text x="80" y="455" font-size="22" font-weight="700">Blood group</text><text x="285" y="455" font-size="22">: ${xml(details.bloodGroup)}</text>
-    <text x="80" y="500" font-size="22" font-weight="700">Emergency No.</text><text x="285" y="500" font-size="22">: ${xml(details.emergencyPhone)}</text></g>
+    <text x="80" y="400" font-size="22">Contact no.</text><text x="285" y="400" font-size="22">: ${xml(details.phone)}</text>
+    <text x="80" y="438" font-size="22" font-weight="700">Blood group</text><text x="285" y="438" font-size="22">: ${xml(details.bloodGroup)}</text>
+    <text x="80" y="476" font-size="22" font-weight="700">Emergency No.</text><text x="285" y="476" font-size="22">: ${xml(details.emergencyPhone)}</text></g>
     <path d="M350 655c40-35 72-28 25 3 56-27 67-8 10 8-54 14-80 36-18 4" fill="none" stroke="#343a40" stroke-width="4" stroke-linecap="round"/>
     <text x="350" y="720" font-family="Arial,sans-serif" font-size="22">Authorised Sign</text><path d="M350 730h150" stroke="#222"/>
     <path d="M0 782h310c55 0 82 31 112 78H0z" fill="url(#red)"/>`);

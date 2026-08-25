@@ -4,7 +4,6 @@ import { session, type SessionUser } from '@/lib/api';
 
 type AppRole =
   | 'employee'
-  | 'admin'
   | 'hq_admin'
   | 'center_admin'
   | 'finance'
@@ -14,7 +13,6 @@ type AppRole =
 
 const homeByRole: Record<AppRole, string> = {
   employee: '/employee',
-  admin: '/admin',
   hq_admin: '/admin',
   center_admin: '/center-admin',
   finance: '/finance',

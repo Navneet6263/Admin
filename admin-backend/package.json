@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test:security": "node scripts/security-smoke.mjs",
-    "test:dashboards": "node scripts/dashboard-smoke.mjs"
+    "test:dashboards": "node scripts/dashboard-smoke.mjs",
+    "test:workflow-audit": "node scripts/workflow-audit.mjs",
+    "test:role-access": "node scripts/role-access-smoke.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

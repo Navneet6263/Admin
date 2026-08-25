@@ -15,6 +15,7 @@ import { Route as CenterAdminRouteImport } from './routes/center-admin'
 import { Route as CommandCenterRouteImport } from './routes/command-center'
 import { Route as EmployeeRouteImport } from './routes/employee'
 import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as FinanceHeadRouteImport } from './routes/finance-head'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as SuperAdminRouteImport } from './routes/super-admin'
 import { Route as VerifierRouteImport } from './routes/verifier'
@@ -49,6 +50,11 @@ const FinanceRoute = FinanceRouteImport.update({
   path: '/finance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FinanceHeadRoute = FinanceHeadRouteImport.update({
+  id: '/finance-head',
+  path: '/finance-head',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
+  '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
+  '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/command-center': typeof CommandCenterRoute
   '/employee': typeof EmployeeRoute
   '/finance': typeof FinanceRoute
+  '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
   '/super-admin': typeof SuperAdminRoute
   '/verifier': typeof VerifierRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/employee'
     | '/finance'
+    | '/finance-head'
     | '/insights'
     | '/super-admin'
     | '/verifier'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/employee'
     | '/finance'
+    | '/finance-head'
     | '/insights'
     | '/super-admin'
     | '/verifier'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/command-center'
     | '/employee'
     | '/finance'
+    | '/finance-head'
     | '/insights'
     | '/super-admin'
     | '/verifier'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   CommandCenterRoute: typeof CommandCenterRoute
   EmployeeRoute: typeof EmployeeRoute
   FinanceRoute: typeof FinanceRoute
+  FinanceHeadRoute: typeof FinanceHeadRoute
   InsightsRoute: typeof InsightsRoute
   SuperAdminRoute: typeof SuperAdminRoute
   VerifierRoute: typeof VerifierRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance-head': {
+      id: '/finance-head'
+      path: '/finance-head'
+      fullPath: '/finance-head'
+      preLoaderRoute: typeof FinanceHeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/insights': {
       id: '/insights'
       path: '/insights'
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   CommandCenterRoute: CommandCenterRoute,
   EmployeeRoute: EmployeeRoute,
   FinanceRoute: FinanceRoute,
+  FinanceHeadRoute: FinanceHeadRoute,
   InsightsRoute: InsightsRoute,
   SuperAdminRoute: SuperAdminRoute,
   VerifierRoute: VerifierRoute,

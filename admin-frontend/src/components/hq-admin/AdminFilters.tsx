@@ -106,9 +106,18 @@ const kpiTone = {
   rose: "border-l-rose-400",
 } as const;
 
-export function KpiTile({ label, value, tone }: { label: string; value: number; tone: keyof typeof kpiTone }) {
+export function KpiTile({ label, value, tone, onClick }: {
+  label: string; value: number; tone: keyof typeof kpiTone; onClick?: () => void;
+}) {
+  const className = `px-3.5 py-2.5 bg-white border border-slate-200 border-l-4 rounded-md min-w-[130px] text-left ${kpiTone[tone]}`;
+  if (onClick) return (
+    <button type="button" onClick={onClick} className={`${className} transition hover:border-slate-300 hover:shadow-sm`}>
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{label}</p>
+      <p className="text-xl font-display font-semibold text-slate-900 tabular-nums mt-0.5">{value}</p>
+    </button>
+  );
   return (
-    <div className={`px-3.5 py-2.5 bg-white border border-slate-200 border-l-4 rounded-md min-w-[130px] ${kpiTone[tone]}`}>
+    <div className={className}>
       <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{label}</p>
       <p className="text-xl font-display font-semibold text-slate-900 tabular-nums mt-0.5">{value}</p>
     </div>

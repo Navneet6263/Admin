@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock3, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, PackageCheck, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export interface CenterRequest {
@@ -19,6 +19,16 @@ export interface CenterRequest {
   charge_center_code?: string;
   assignment_type?: string;
   can_act?: boolean;
+  fulfillment_status?: string;
+  audit?: string | Array<{ actor?: string; action?: string; at?: string }>;
+}
+
+function approvedBy(request: CenterRequest) {
+  try {
+    const rows = typeof request.audit === 'string' ? JSON.parse(request.audit) : request.audit;
+    if (!Array.isArray(rows)) return '';
+    return [...rows].reverse().find((row) => row.action === 'approved')?.actor || '';
+  } catch { return ''; }
 }
 
 const priorityTone: Record<string, string> = {
@@ -34,20 +44,29 @@ const statusTone: Record<string, string> = {
   approved: 'bg-emerald-50 text-emerald-700',
   rejected: 'bg-rose-50 text-rose-700',
   queued: 'bg-indigo-50 text-indigo-700',
+  awaiting_verification: 'bg-violet-50 text-violet-700',
+  withdrawn: 'bg-orange-50 text-orange-700',
 };
 
-export function CenterRequestCard({ req, onApprove, onReject }: {
+export function CenterRequestCard({ req, onApprove, onReject, onAssign }: {
   req: CenterRequest;
   onApprove: (id: number) => Promise<void>;
   onReject: (id: number) => Promise<void>;
+  onAssign: (id: number) => Promise<void>;
 }) {
-  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'assign' | null>(null);
   const workflow = req.workflow_status || req.status;
   const actionable = req.can_act !== false && ['pending', 'awaiting_approval'].includes(workflow);
+  const assignable = req.fulfillment_status === 'ready_to_assign';
+  const approver = assignable ? approvedBy(req) : '';
   const act = async (action: 'approve' | 'reject') => {
     setBusy(action);
     try { await (action === 'approve' ? onApprove(req.id) : onReject(req.id)); }
     finally { setBusy(null); }
+  };
+  const assign = async () => {
+    setBusy('assign');
+    try { await onAssign(req.id); } finally { setBusy(null); }
   };
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/30 transition hover:border-slate-300 hover:shadow-md">
@@ -62,6 +81,7 @@ export function CenterRequestCard({ req, onApprove, onReject }: {
           <h3 className="mt-2 text-sm font-semibold text-slate-900">{req.subject}</h3>
           <p className="mt-1 text-[11px] text-slate-500">{req.employeeName} · {req.employeeDept} · {req.type.replaceAll('_', ' ')}</p>
         </div>
+        {assignable && <span className="shrink-0 rounded-md bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-700"><PackageCheck className="mr-1 inline h-3.5 w-3.5" />Ready to assign</span>}
         {req.amount != null && <span className="shrink-0 font-mono text-sm font-semibold text-slate-900">₹{Number(req.amount).toLocaleString('en-IN')}</span>}
       </div>
       {actionable && <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
@@ -74,7 +94,12 @@ export function CenterRequestCard({ req, onApprove, onReject }: {
           <XCircle className="h-3.5 w-3.5" /> {busy === 'reject' ? 'Rejecting…' : 'Reject'}
         </button>
       </div>}
-      {!actionable && workflow === 'awaiting_approval' && <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-700"><AlertCircle className="h-3.5 w-3.5" /> This request is visible but assigned to another approver.</p>}
+      {assignable && <button type="button" disabled={busy !== null} onClick={() => void assign()}
+        className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-700 disabled:opacity-50">
+        <PackageCheck className="h-3.5 w-3.5" /> {busy === 'assign' ? 'Saving handover…' : 'Mark as handed over'}
+      </button>}
+      {assignable && approver && <p className="mt-2 text-center text-[10px] text-slate-500">Approved by <span className="font-semibold text-slate-700">{approver}</span></p>}
+      {!actionable && workflow === 'awaiting_approval' && <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-[10px] text-amber-700"><AlertCircle className="h-3.5 w-3.5" /> {req.status === 'queued' ? 'Locked for Super Admin decision.' : 'This request is visible but assigned to another approver.'}</p>}
     </article>
   );
 }

@@ -37,11 +37,11 @@ router.post('/', async (req: Request, res: Response) => {
   if (invalidPassword) return res.status(400).json({ error: invalidPassword });
 
   const validRoles: Role[] = [
-    'employee', 'admin', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
+    'employee', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
   ];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid user role' });
   const actorRole = effectiveRole(req.user!.role);
-  if (actorRole === 'hq_admin' && ['admin', 'hq_admin', 'super_admin'].includes(role)) {
+  if (actorRole === 'hq_admin' && ['hq_admin', 'super_admin'].includes(role)) {
     return res.status(403).json({ error: 'Only Super Admin can create HQ or Super Admin accounts' });
   }
   if ((role === 'center_admin' || role === 'employee') && !String(center_code || '').trim()) {
@@ -89,11 +89,17 @@ router.post('/:id/assign-center', async (req: Request, res: Response) => {
   try {
     await tx.begin();
     const target = await tx.request().input('uid', mssql.Int, userId)
-      .query(`SELECT role FROM users WHERE id=@uid`);
+      .query(`SELECT role,center_code FROM users WITH(UPDLOCK,ROWLOCK) WHERE id=@uid`);
     if (!target.recordset[0]) { await tx.rollback(); return res.status(404).json({ error: 'User not found' }); }
-    if (['hq_admin','admin','super_admin'].includes(target.recordset[0].role)) {
+    if (['hq_admin','super_admin'].includes(target.recordset[0].role)) {
       await tx.rollback();
       return res.status(400).json({ error: 'HQ and Super Admin use global center access' });
+    }
+    const center = await tx.request().input('cc', mssql.NVarChar(10), center_code)
+      .query(`SELECT code,name,city FROM centers WHERE code=@cc AND is_active=1`);
+    if (!center.recordset[0]) {
+      await tx.rollback();
+      return res.status(400).json({ error: 'Selected center is not active' });
     }
 
     // Update denormalized column on users
@@ -114,10 +120,22 @@ router.post('/:id/assign-center', async (req: Request, res: Response) => {
           INSERT INTO user_centers (user_id, home_center_code, assigned_by) VALUES (@uid, @cc, @actor)
       `);
 
+    await tx.request()
+      .input('actor', mssql.Int, actorId)
+      .input('target', mssql.Int, userId)
+      .input('note', mssql.NVarChar(1000),
+        `Center changed from ${target.recordset[0].center_code || 'unassigned'} to ${center_code}`)
+      .query(`INSERT INTO admin_audit_events(actor_id,target_user_id,event_type,note)
+        VALUES(@actor,@target,'center_assigned',@note)`);
+
     await tx.commit();
     clearCache('sa:users');
-    res.json({ success: true, center_code });
-  } catch (err) { await tx.rollback(); console.error(err); res.status(500).json({ error: 'Center assignment failed' }); }
+    res.json({ success: true, center_code, center_name: center.recordset[0].name,
+      center_city: center.recordset[0].city });
+  } catch (err) {
+    try { await tx.rollback(); } catch { /* transaction already closed */ }
+    console.error(err); res.status(500).json({ error: 'Center assignment failed' });
+  }
 });
 
 // ── GET /api/super-admin/users/unassigned ────────────────────

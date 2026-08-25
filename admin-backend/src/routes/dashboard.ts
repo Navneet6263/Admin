@@ -4,7 +4,7 @@ import { pool, getCached, setCache } from '../db';
 import { requireAuth } from '../auth';
 
 const router = Router();
-router.use(requireAuth('super_admin', 'hq_admin', 'admin'));
+router.use(requireAuth('super_admin', 'hq_admin'));
 
 // ── GET /api/dashboard/command-center ────────────────────────
 // Returns health score for every center (Green / Amber / Red)

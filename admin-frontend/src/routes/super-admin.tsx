@@ -42,6 +42,7 @@ function SuperAdmin() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
+  const [actionError, setActionError] = useState("");
 
   // Centers state
   const [centerUsers, setCenterUsers] = useState<UserRow[]>([]);
@@ -99,7 +100,8 @@ function SuperAdmin() {
       closed.reduce((a, r) => a + (+new Date(r.updatedAt) - +new Date(r.createdAt))/3_600_000, 0) / closed.length
     ) : 0;
     const rate = approved + rejected > 0 ? Math.round((approved/(approved+rejected))*100) : 0;
-    return { approved, rejected, avgTat, rate, total: requests.length };
+    return { approved, rejected, avgTat, rate, total: requests.length,
+      deliveryIssues: requests.filter((requestItem) => requestItem.receiptStatus === "disputed").length };
   }, [requests]);
 
   const overrideList = useMemo(() => searchedRequests
@@ -122,16 +124,20 @@ function SuperAdmin() {
     }));
     const target = requests.find(r => r.id === id);
     if (target?.dbId) {
-      await request(`/api/super-admin/requests/${target.dbId}/override`, { method: 'POST', body: { next_status: next, note } });
-      await refresh();
+      try {
+        setActionError("");
+        await request(`/api/super-admin/requests/${target.dbId}/override`, { method: 'POST', body: { next_status: next, note } });
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : "Workflow action failed");
+      } finally { await refresh(); }
     }
   }, [actor, refresh, requests]);
 
   const onDetailAction = useCallback((id: string, action: string, note: string) => {
-    if (action === "approve") void override(id, "approved", "Force-approved", note);
+    if (action === "approve") void override(id, "approved", "Workflow-approved", note);
     else if (action === "reject") void override(id, "rejected", "Force-rejected", note);
     else if (action === "queue") void override(id, "queued", "Held for review", note);
-    else if (action === "verify") void override(id, "approved", "Force-closed", note);
+    else if (action === "verify") void override(id, "approved", "Verified", note);
     else if (action === "send_back") void override(id, "pending", "Sent back to Admin", note);
   }, [override]);
 
@@ -175,6 +181,7 @@ function SuperAdmin() {
               tone={monthDelta >= 0 ? "rose" : "emerald"} />
             <StatChip icon={CheckCircle2} label="Approval rate" value={`${kpis.rate}%`} sub={`${kpis.approved}/${kpis.total}`} />
             <StatChip icon={Clock} label="Avg TAT" value={`${kpis.avgTat}h`} />
+            <StatChip icon={AlertTriangle} label="Delivery issues" value={String(kpis.deliveryIssues)} tone={kpis.deliveryIssues ? "rose" : undefined} />
           </div>
         </div>
 
@@ -210,6 +217,7 @@ function SuperAdmin() {
       </div>
 
       <div className="px-4 sm:px-6 pb-10">
+        {actionError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{actionError}</div>}
         {tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}
         {tab === "analytics" && <AnalyticsTab requests={searchedRequests} history={buildHistory(searchedRequests)} centerCode={scopeCenter} />}
         {tab === "inventory" && <InventoryTab searchQuery={centerSearch} />}

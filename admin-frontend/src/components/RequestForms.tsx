@@ -11,6 +11,7 @@ import { VisionIndiaIdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
 import { PhotoCropper } from "./id-card/PhotoCropper";
 import { downloadIdCardPdf } from "./id-card/idCardPdf";
 import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
+import { IndianMobileField, isValidIndianMobile } from "./id-card/IndianMobileField";
 
 /* ---------- shared field helpers ---------- */
 const inputCls =
@@ -123,8 +124,9 @@ export const idCardDetails = (value: IdCardState, profile?: RequesterProfile): I
   designation: value.designation.trim() || profile?.dept || "—", department: profile?.dept || "—",
   phone: value.phone, bloodGroup: value.bloodGroup, emergencyPhone: value.emergencyPhone, photoDataUrl: value.photoDataUrl,
 });
-const idCardReady = (value: IdCardState, profile?: RequesterProfile) => Boolean(value.photoDataUrl && value.phone.trim().length >= 7 &&
-  value.emergencyPhone.trim().length >= 7 && value.bloodGroup && (value.designation.trim() || profile?.dept));
+const idCardReady = (value: IdCardState, profile?: RequesterProfile) => Boolean(value.photoDataUrl &&
+  isValidIndianMobile(value.phone) && isValidIndianMobile(value.emergencyPhone) &&
+  value.bloodGroup && (value.designation.trim() || profile?.dept));
 export const idCardValid = (value: IdCardState, profile?: RequesterProfile) =>
   value.reason.trim().length >= 5 && idCardReady(value, profile) && value.confirmed;
 
@@ -159,9 +161,9 @@ export function IdCardForm({ value, onChange, profile }: { value: IdCardState; o
 
       <div className="grid grid-cols-2 gap-3">
         <TextField label="Designation" value={value.designation} onChange={(next) => set("designation", next)} placeholder={profile?.dept || "Designation"} />
-        <TextField label="Contact number" value={value.phone} onChange={(next) => set("phone", next.replace(/[^0-9+ -]/g, ""))} placeholder="+91 98xxxxxx" />
+        <IndianMobileField label="Contact number" value={value.phone} onChange={(next) => set("phone", next)} />
         <SelectField label="Blood group" value={value.bloodGroup} onChange={(next) => set("bloodGroup", next)} options={["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]} />
-        <TextField label="Emergency number" value={value.emergencyPhone} onChange={(next) => set("emergencyPhone", next.replace(/[^0-9+ -]/g, ""))} placeholder="Emergency contact" />
+        <IndianMobileField label="Emergency number" value={value.emergencyPhone} onChange={(next) => set("emergencyPhone", next)} />
       </div>
 
       <div className="rounded-xl border border-white/15 bg-white/5 p-3">

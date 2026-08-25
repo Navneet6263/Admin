@@ -63,7 +63,6 @@ function Home() {
           center_admin: '/center-admin',
           finance_head: '/finance',
           hq_admin: '/admin',
-          admin: '/admin',
         };
         const target = routes[user.role] ?? `/${user.role}`;
         void navigate({ to: target as '/admin' });
@@ -92,7 +91,6 @@ function Home() {
           center_admin: '/center-admin',
           finance_head: '/finance',
           hq_admin: '/admin',
-          admin: '/admin',
         };
         const target = routes[user.role] ?? `/${user.role}`;
         void navigate({ to: target as '/employee' });

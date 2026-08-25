@@ -42,7 +42,7 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
   };
 
   const cfg: Record<Exclude<Mode, null>, { title: string; hint: string; cta: string; required: boolean; ctaCls: string }> = {
-    approve:   { title: "Approve request", hint: "Notes optional. Sends to Verifier for claim check.", cta: "Approve → send to Verifier", required: false, ctaCls: "bg-emerald-600 hover:bg-emerald-700" },
+    approve:   { title: "Approve request", hint: "This completes the request and issues available inventory immediately.", cta: "Approve and complete", required: false, ctaCls: "bg-emerald-600 hover:bg-emerald-700" },
     reject:    { title: "Reject request", hint: "Reason is mandatory and shared with the employee.", cta: "Confirm rejection", required: true, ctaCls: "bg-rose-600 hover:bg-rose-700" },
     queue:     { title: "Queue for Super Admin", hint: "Add context for Super Admin review.", cta: "Forward to Super Admin", required: false, ctaCls: "bg-indigo-600 hover:bg-indigo-700" },
     info:      { title: "Request more info", hint: "Ask the employee to clarify.", cta: "Send to employee", required: false, ctaCls: "bg-slate-900 hover:bg-black" },
@@ -80,6 +80,9 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
               {fmtINR(request.amount)}
             </span>
           )}
+          {request.receiptStatus === "awaiting_confirmation" && <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Awaiting employee receipt</span>}
+          {request.receiptStatus === "received" && <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Employee received</span>}
+          {request.receiptStatus === "disputed" && <span className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">Delivery disputed</span>}
         </div>
       </div>
 
@@ -202,13 +205,16 @@ function describeAction(a: string) {
     case "created":
     case "raised": return "raised this request";
     case "withdrawn": return "withdrew this request";
-    case "approved": return "approved · sent to Verifier";
+    case "approved": return "approved and completed the request";
     case "rejected": return "rejected / withdrew the request";
     case "queued": return "queued for Super Admin review";
     case "info_requested": return "requested more information";
     case "commented": return "added a note";
     case "verified": return "verified · closed the request";
     case "sent_back": return "sent back to Admin";
+    case "assigned": return "handed the item over to the employee";
+    case "receipt_confirmed": return "confirmed receiving the item";
+    case "receipt_disputed": return "reported that the item was not received";
     default: return a;
   }
 }

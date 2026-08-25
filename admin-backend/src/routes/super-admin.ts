@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import mssql from 'mssql';
-import { pool, getCached, setCache, clearCache, VALID_STATUSES, type RequestStatus } from '../db';
+import { pool, getCached, setCache, clearCache } from '../db';
+import { applySuperOverride } from '../services/superOverride';
 
 const router = Router();
 
@@ -39,48 +40,15 @@ router.get('/requests', async (req: Request, res: Response) => {
 // ── POST /api/super-admin/requests/:id/override ──────────────────────────────
 router.post('/requests/:id/override', async (req: Request, res: Response) => {
   const { next_status, note = '' } = req.body ?? {};
-
-  if (!next_status || !VALID_STATUSES.includes(next_status as RequestStatus))
-    return res.status(400).json({ error: 'Invalid next_status' });
-
-  const tx = pool.transaction();
   try {
-    await tx.begin();
-
-    const updated = await tx.request()
-      .input('id',     mssql.Int,      +req.params.id)
-      .input('status', mssql.NVarChar, next_status)
-      .query(`UPDATE requests SET status=@status,updated_at=GETDATE()
-        OUTPUT inserted.user_id,inserted.ref_id WHERE id=@id`);
-    const { user_id: userId, ref_id: refId } = updated.recordset[0] ?? {};
-    if (!userId) {
-      await tx.rollback();
-      return res.status(404).json({ error: 'Request not found' });
-    }
-
-    await tx.request()
-      .input('request_id', mssql.Int,     +req.params.id)
-      .input('actor_id',   mssql.Int,     req.user!.id)
-      .input('action',     mssql.NVarChar, next_status === 'approved' ? 'approved' : next_status === 'rejected' ? 'rejected' : 'commented')
-      .input('note',       mssql.NVarChar, note || `Super Admin override → ${next_status}`)
-      .query(`INSERT INTO approvals (request_id,actor_id,action,note) VALUES (@request_id,@actor_id,@action,@note)`);
-
-    if (userId) {
-      await tx.request()
-        .input('user_id', mssql.Int,     userId)
-        .input('message', mssql.NVarChar, `Your request ${refId} status updated to ${next_status} by Super Admin.`)
-        .query(`INSERT INTO notifications (user_id,message) VALUES (@user_id,@message)`);
-    }
-
-    await tx.commit();
-    // Bust all caches
-    VALID_STATUSES.forEach(s => clearCache(`admin:requests:${s}`, `sa:requests:all:${s}`));
-    clearCache('admin:stats', `employee:${userId}:requests`, 'verifier:queue');
-    res.json({ success: true });
-  } catch (err) {
-    await tx.rollback();
-    console.error(err);
-    res.status(500).json({ error: 'Override failed' });
+    const status = await applySuperOverride(+req.params.id, req.user!.id, next_status, note);
+    clearCache();
+    res.json({ success: true, status });
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : 'Override failed';
+    res.status(message === 'Request not found' ? 404 : /Invalid|not at|cannot/.test(message) ? 409 : 500)
+      .json({ error: message });
   }
 });
 

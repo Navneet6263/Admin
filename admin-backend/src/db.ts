@@ -109,9 +109,9 @@ async function runMigrations() {
     // HQ and Super Admin are global roles; center assignment is only a dashboard filter.
     await pool.request().query(`
       DELETE uc FROM user_centers uc JOIN users u ON u.id=uc.user_id
-        WHERE u.role IN ('hq_admin','admin','super_admin');
+        WHERE u.role IN ('hq_admin','super_admin');
       UPDATE users SET center_code=NULL
-        WHERE role IN ('hq_admin','admin','super_admin') AND center_code IS NOT NULL;
+        WHERE role IN ('hq_admin','super_admin') AND center_code IS NOT NULL;
     `);
 
     // Add center columns to requests if missing
@@ -180,7 +180,7 @@ export function clearCache(...keys: string[]) {
 // ── Shared types ─────────────────────────────────────────────────────────────
 export type RequestStatus =
   | 'pending' | 'queued' | 'awaiting_verification'
-  | 'approved' | 'rejected' | 'info_requested';
+  | 'approved' | 'rejected' | 'info_requested' | 'withdrawn';
 
 export type RequestType =
   | 'id_card' | 'visiting_card' | 'stationery'
@@ -199,5 +199,5 @@ export const VALID_TYPES: RequestType[] = [
 
 export const VALID_STATUSES: RequestStatus[] = [
   'pending', 'queued', 'awaiting_verification',
-  'approved', 'rejected', 'info_requested',
+  'approved', 'rejected', 'info_requested', 'withdrawn',
 ];

@@ -103,12 +103,19 @@ export function toRequest(row: Record<string, unknown>): RequestItem {
     approvalCenter: String(row.approval_center_code || ''), chargeCenter: String(row.charge_center_code || ''),
     inventoryCenter: String(row.inventory_center_code || ''), workflowStatus: String(row.workflow_status || ''),
     paymentStatus: String(row.payment_status || ''), canAct: Boolean(row.can_act),
+    fulfillmentStatus: (row.fulfillment_status || 'not_required') as RequestItem['fulfillmentStatus'],
+    fulfilledBy: row.fulfilled_by == null ? null : Number(row.fulfilled_by),
+    fulfilledAt: row.fulfilled_at == null ? null : String(row.fulfilled_at),
+    receiptStatus: (row.receipt_status || 'not_required') as RequestItem['receiptStatus'],
+    receiptFeedback: (row.receipt_feedback || null) as RequestItem['receiptFeedback'],
+    receiptNote: row.receipt_note == null ? null : String(row.receipt_note),
+    receiptConfirmedAt: row.receipt_confirmed_at == null ? null : String(row.receipt_confirmed_at),
   };
 }
 
 export const getRequests = async (path: string) => (await request<Record<string, unknown>[]>(path)).map(toRequest);
-export interface Paged<T> { data: T[]; page: number; page_size: number; total: number; }
-export const getPagedRequests = async (path: string) => {
-  const page = await request<Paged<Record<string, unknown>>>(path);
+export interface Paged<T, S = unknown> { data: T[]; page: number; page_size: number; total: number; summary?: S; }
+export const getPagedRequests = async <S = unknown>(path: string) => {
+  const page = await request<Paged<Record<string, unknown>, S>>(path);
   return { ...page, data: page.data.map(toRequest) };
 };

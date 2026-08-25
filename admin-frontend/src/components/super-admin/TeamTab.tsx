@@ -3,6 +3,8 @@ import { Building2, Plus, Search, X, RotateCcw } from "lucide-react";
 import { request } from "@/lib/api";
 import { SmartUserForm } from "./SmartUserForm";
 import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
+import { PaginationBar } from "@/components/PaginationBar";
+import { CenterAccessEditor } from "./CenterAccessEditor";
 
 interface TeamTabProps {
   mode?: 'super' | 'hq';
@@ -30,6 +32,8 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
   const [companyFilter, setCompanyFilter] = useState('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
   // Dynamic Company & Team Creation state
   const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string; legal_name: string }>>([]);
@@ -111,10 +115,13 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
   const assignCenter = async (userId: number, centerCode: string) => {
     setAssigningId(userId); setAssignmentError('');
     try {
-      await request(`${userApiBase}/${userId}/assign-center`, {
+      const updated = await request<{ center_code: string; center_name: string; center_city: string }>(`${userApiBase}/${userId}/assign-center`, {
         method: 'POST', body: { center_code: centerCode },
       });
-      await fetchUsersAndTeams();
+      setUsers((current) => current.map((user) => user.id === userId ? {
+        ...user, center_code: updated.center_code,
+        center_name: updated.center_name, center_city: updated.center_city,
+      } : user));
     } catch (cause) {
       setAssignmentError(cause instanceof Error ? cause.message : 'Center assignment failed');
     } finally {
@@ -125,14 +132,13 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
   const roleBadges: Record<string, string> = {
     super_admin: 'bg-purple-100 text-purple-800 border-purple-200',
     hq_admin: 'bg-slate-100 text-slate-800 border-slate-200',
-    admin: 'bg-slate-100 text-slate-800 border-slate-200',
     center_admin: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     finance: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     finance_head: 'bg-teal-100 text-teal-800 border-teal-200',
     verifier: 'bg-violet-100 text-violet-800 border-violet-200',
     employee: 'bg-sky-100 text-sky-800 border-sky-200',
   };
-  const globalRole = (role: string) => ['hq_admin', 'admin', 'super_admin'].includes(role);
+  const globalRole = (role: string) => ['hq_admin', 'super_admin'].includes(role);
 
   const filterOptions = useMemo(() => ({
     roles: [...new Set(users.map((user) => user.role).filter(Boolean))].sort(),
@@ -154,6 +160,8 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
         && (statusFilter === 'all' || (statusFilter === 'active') === Boolean(user.is_active));
     });
   }, [centerFilter, companyFilter, deptFilter, roleFilter, searchQuery, statusFilter, userQuery, users]);
+  useEffect(() => { setPage(1); }, [centerFilter, companyFilter, deptFilter, roleFilter, searchQuery, statusFilter, userQuery]);
+  const pagedUsers = useMemo(() => filteredUsers.slice((page - 1) * pageSize, page * pageSize), [filteredUsers, page]);
   const filtersActive = Boolean(userQuery) || [roleFilter, centerFilter, companyFilter, deptFilter, statusFilter].some((value) => value !== 'all');
   const resetFilters = () => {
     setUserQuery(''); setRoleFilter('all'); setCenterFilter('all');
@@ -303,13 +311,13 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
                   <th className="px-4 py-2.5">Role</th>
                   <th className="px-4 py-2.5">Entity</th>
                   <th className="px-4 py-2.5">Center</th>
-                  <th className="min-w-64 px-4 py-2.5">Assign Center</th>
+                  <th className="min-w-72 px-4 py-2.5">Center Permissions</th>
                   <th className="px-4 py-2.5">Team / Dept</th>
                   <th className="px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map((u) => (
+                {pagedUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-4 py-3 font-mono text-[11px] text-slate-400">#{u.id}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900">{u.name}</td>
@@ -333,6 +341,9 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
                             disabled={assigningId === u.id} placeholder="Search center…" className="w-full" />
                           {assigningId === u.id && <span className="shrink-0 text-[10px] text-indigo-600">Saving…</span>}
                         </div>}
+                      {u.role === 'center_admin' && <CenterAccessEditor userId={u.id}
+                        homeCenter={u.center_code} centers={centers.filter((center) => center.is_active !== false)}
+                        apiBase={userApiBase} />}
                     </td>
                     <td className="px-4 py-3 text-slate-600 font-medium">{u.dept || '—'}</td>
                     <td className="px-4 py-3">
@@ -347,6 +358,7 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
             </table>
           </div>
         )}
+        {!loading && <PaginationBar page={page} pageSize={pageSize} total={filteredUsers.length} onPageChange={setPage} />}
       </div>
     </div>
   );

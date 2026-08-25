@@ -19,7 +19,7 @@ function expect(label, actual, expected) {
   console.log(`PASS ${label}: ${actual}`);
 }
 
-for (const path of ['/api/teams', '/api/companies', '/api/centers/public']) {
+for (const path of ['/api/teams', '/api/companies', '/api/centers/public', '/api/employee/receipts/pending']) {
   const { response } = await call(path);
   expect(`unauthenticated ${path}`, response.status, 401);
 }
@@ -40,9 +40,7 @@ expect('public registration disabled', registration.response.status, 403);
 
 if (!credentials) {
   console.log('Authenticated checks skipped: set TEST_EMAIL and TEST_PASSWORD.');
-  process.exit(0);
-}
-
+} else {
 const login = await call('/api/auth/login', {
   method: 'POST', headers: { Origin: origin },
   body: { email: process.env.TEST_EMAIL, password: process.env.TEST_PASSWORD },
@@ -85,3 +83,4 @@ const logout = await call('/api/auth/logout', {
 expect('logout', logout.response.status, 200);
 const replay = await call('/api/auth/me', { headers: { Cookie: cookie } });
 expect('revoked session replay', replay.response.status, 401);
+}

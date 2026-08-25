@@ -6,9 +6,11 @@ import { RequestDetail } from "@/components/RequestDetail";
 import { NewRequestDialog } from "@/components/NewRequestDialog";
 import { priorityRank, typeLabels, type Priority, type RequestItem, type RequestStatus, type RequestType } from "@/components/models";
 import { typeIcon } from "@/components/requestMeta";
-import { getRequests, request, session } from "@/lib/api";
-import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles, AlertTriangle, X } from "lucide-react";
+import { getPagedRequests, request } from "@/lib/api";
+import { PaginationBar } from "@/components/PaginationBar";
+import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles, AlertTriangle, X, Undo2 } from "lucide-react";
 import { protectedRoute } from "@/components/ProtectedRoute";
+import { ReceiptConfirmationDialog, type ReceiptPrompt } from "@/components/employee/ReceiptConfirmationDialog";
 
 export const Route = createFileRoute("/employee")({
   head: () => ({
@@ -20,7 +22,8 @@ export const Route = createFileRoute("/employee")({
   component: protectedRoute(EmployeeConsole, ['employee']),
 });
 
-type Tab = "active" | "approved" | "rejected" | "all";
+type Tab = "active" | "approved" | "rejected" | "withdrawn" | "all";
+type RequestSummary = Record<Tab, number> & { queued: number };
 
 function EmployeeConsole() {
   const [requests, setRequests] = useState<RequestItem[]>([]);
@@ -33,22 +36,40 @@ function EmployeeConsole() {
     id: 0, name: "", email: "", dept: "", company: "", center_code: null
   });
   const [centers, setCenters] = useState<Array<{ code: string; name: string; city: string }>>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<RequestSummary>({ active: 0, queued: 0, approved: 0, rejected: 0, withdrawn: 0, all: 0 });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [pendingReceipts, setPendingReceipts] = useState<ReceiptPrompt[]>([]);
+  const pageSize = 25;
 
   const refresh = useCallback(async () => {
     try {
       const me = await request<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>('/api/auth/me');
       setCurrentUser(me);
       const [mine, centerList] = await Promise.allSettled([
-        getRequests(`/api/employee/requests/${me.id}`),
+        getPagedRequests<RequestSummary>(`/api/employee/requests/${me.id}?view=${tab}&page=${page}&page_size=${pageSize}`),
         request<Array<{ code: string; name: string; city: string }>>('/api/centers/public'),
       ]);
-      if (mine.status === "fulfilled") setRequests(mine.value);
+      if (mine.status === "fulfilled") {
+        setRequests(mine.value.data); setTotal(mine.value.total);
+        if (mine.value.summary) setSummary(mine.value.summary);
+      }
       else console.error("Unable to refresh employee requests", mine.reason);
       if (centerList.status === "fulfilled") setCenters(centerList.value);
       else console.error("Unable to refresh centers", centerList.reason);
     } catch (error) { console.error(error); }
-  }, []);
+  }, [page, reloadKey, tab]);
   useEffect(() => { void refresh(); }, [refresh]);
+  const loadReceipts = useCallback(async () => {
+    try { setPendingReceipts(await request<ReceiptPrompt[]>("/api/employee/receipts/pending")); }
+    catch (error) { console.error("Unable to load delivery confirmations", error); }
+  }, []);
+  useEffect(() => {
+    void loadReceipts();
+    const timer = window.setInterval(() => void loadReceipts(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [loadReceipts]);
 
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,12 +79,7 @@ function EmployeeConsole() {
     return requests.filter((r) => !r.employeeId || r.employeeId === currentUser.id);
   }, [requests, currentUser.id]);
 
-  const counts = useMemo(() => ({
-    active: mine.filter((r) => r.status === "pending" || r.status === "queued" || r.status === "info_requested" || r.status === "awaiting_verification").length,
-    approved: mine.filter((r) => r.status === "approved").length,
-    rejected: mine.filter((r) => r.status === "rejected").length,
-    all: mine.length,
-  }), [mine]);
+  const counts = summary;
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -98,13 +114,14 @@ function EmployeeConsole() {
       body: { ...draft, details: { ...draft.details, items: draft.items } }
     });
     setTab("active");
+    setPage(1);
     if (created?.ref_id) setSelectedId(created.ref_id);
     setSuccessToast(`Request ${created?.ref_id || 'submitted'} created and policy-routed successfully.`);
     setTimeout(() => setSuccessToast(null), 6000);
     setDialogOpen(false);
     setPrefillType(null);
-    void refresh();
-  }, [refresh]);
+    setReloadKey((value) => value + 1);
+  }, []);
 
   const cancelRequest = useCallback(async (reqItem: RequestItem) => {
     try {
@@ -112,19 +129,33 @@ function EmployeeConsole() {
         method: 'PATCH',
         body: { user_id: currentUser.id, note: 'Withdrawn by requester' }
       });
-      await refresh();
+      setTab("withdrawn"); setPage(1); setReloadKey((value) => value + 1);
       setSuccessToast(`Request ${reqItem.id} has been withdrawn.`);
       setTimeout(() => setSuccessToast(null), 5000);
     } catch (err) {
       console.error(err);
     }
-  }, [refresh, currentUser.id]);
+  }, [currentUser.id]);
+
+  const confirmReceipt = useCallback(async (answer: {
+    received: boolean; feedback?: "very_easy" | "easy" | "needs_improvement"; note: string;
+  }) => {
+    const current = pendingReceipts[0];
+    if (!current) return;
+    await request(`/api/employee/requests/${current.id}/receipt`, { method: "POST", body: answer });
+    setPendingReceipts((items) => items.filter((item) => item.id !== current.id));
+    setSuccessToast(answer.received ? `Receipt confirmed for ${current.ref_id}. Thank you for your feedback.`
+      : `${current.ref_id} was reported as not received. HQ and Super Admin have been alerted.`);
+    setTimeout(() => setSuccessToast(null), 6000);
+    setReloadKey((value) => value + 1);
+  }, [pendingReceipts]);
 
   const kpis = [
     { label: "In progress", value: counts.active, icon: Inbox, tone: "amber" as const },
-    { label: "With Super Admin", value: mine.filter((r) => r.status === "queued").length, icon: Send, tone: "indigo" as const },
+    { label: "With Super Admin", value: counts.queued, icon: Send, tone: "indigo" as const },
     { label: "Approved", value: counts.approved, icon: CheckCircle2, tone: "emerald" as const },
     { label: "Rejected", value: counts.rejected, icon: XCircle, tone: "rose" as const },
+    { label: "Withdrawn", value: counts.withdrawn, icon: Undo2, tone: "orange" as const },
   ];
 
   const quickTypes: RequestType[] = ["id_card", "visiting_card", "stationery", "travel", "courier", "meeting_room", "fooding"];
@@ -133,6 +164,7 @@ function EmployeeConsole() {
     { id: "active", label: "Active", count: counts.active },
     { id: "approved", label: "Approved", count: counts.approved },
     { id: "rejected", label: "Rejected", count: counts.rejected },
+    { id: "withdrawn", label: "Withdrawn", count: counts.withdrawn },
     { id: "all", label: "All", count: counts.all },
   ];
 
@@ -168,7 +200,7 @@ function EmployeeConsole() {
         )}
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-6">
           {kpis.map((k) => <KpiTile key={k.label} {...k} />)}
         </div>
 
@@ -196,7 +228,7 @@ function EmployeeConsole() {
         {/* Filter Tabs */}
         <div className="flex items-center gap-2 border-b border-slate-200 mb-4">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => { setTab(t.id); setPage(1); }}
               className={`pb-2 px-1 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 tab === t.id ? "border-slate-900 text-slate-900 font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"
               }`}>
@@ -212,9 +244,10 @@ function EmployeeConsole() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
           <div className="lg:col-span-5 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
             <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>{filtered.length} requests</span>
+              <span>{total} requests</span>
               <span>Sorted by priority & date</span>
             </div>
+            <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
             <div className="divide-y divide-slate-100 overflow-y-auto max-h-[560px]">
               {filtered.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400">
@@ -299,6 +332,9 @@ function EmployeeConsole() {
         </div>
       )}
 
+      {pendingReceipts[0] && <ReceiptConfirmationDialog prompt={pendingReceipts[0]}
+        remaining={pendingReceipts.length} onSubmit={confirmReceipt} />}
+
       <NewRequestDialog open={dialogOpen} initialType={prefillType} centers={centers} homeCenter={currentUser.center_code || ""} employeeProfile={currentUser}
         onClose={() => { setDialogOpen(false); setPrefillType(null); }}
         onSubmit={submitDraft} />
@@ -311,6 +347,7 @@ const kpiTone = {
   indigo: "border-l-indigo-400",
   emerald: "border-l-emerald-400",
   rose: "border-l-rose-400",
+  orange: "border-l-orange-400",
 } as const;
 
 function KpiTile({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof Inbox; tone: keyof typeof kpiTone }) {

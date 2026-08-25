@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { InventoryPanel } from "@/components/InventoryPanel";
-import { inventoryStore, useInventory, isLow } from "@/components/liveInventory";
+import { useInventory, isLow } from "@/components/liveInventory";
 import { priorityRank, type RequestItem, type RequestStatus, type RequestType, type Priority } from "@/components/models";
 import { KpiTile, type SortKey, type AgeFilterKey } from "@/components/hq-admin/AdminFilters";
 import { HqQueuePanel } from "@/components/hq-admin/HqQueuePanel";
@@ -12,7 +12,7 @@ import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
 import { TeamTab } from "@/components/super-admin/TeamTab";
 import { getPagedRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
-import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart } from "lucide-react";
+import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2 } from "lucide-react";
 import { protectedRoute } from "@/components/ProtectedRoute";
 
 export const Route = createFileRoute("/admin")({
@@ -22,10 +22,11 @@ export const Route = createFileRoute("/admin")({
       { name: "description", content: "HQ request queue. Review, approve, reject and escalate to Super Admin." },
     ],
   }),
-  component: protectedRoute(HqAdminConsole, ['admin', 'hq_admin']),
+  component: protectedRoute(HqAdminConsole, ['hq_admin']),
 });
 
-type Tab = "inbox" | "queued" | "approved" | "rejected" | "all";
+type Tab = "inbox" | "queued" | "ready_to_assign" | "delivery_issues" | "approved" | "rejected" | "withdrawn" | "all";
+type QueueSummary = Record<Tab, number>;
 
 function HqAdminConsole() {
   const sessionUser = useSessionUser();
@@ -40,7 +41,7 @@ function HqAdminConsole() {
   const autoNote = useCallback((action: "approve" | "reject" | "queue" | "info", userNote: string) => {
     const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     const verb =
-      action === "approve" ? "Approved · sent to Verifier" :
+      action === "approve" ? "Approved and completed" :
       action === "reject" ? "Rejected" :
       action === "queue" ? "Queued for Super Admin" : "Info requested";
     const head = `${verb} by ${actorTag()} · ${ts} IST`;
@@ -60,13 +61,23 @@ function HqAdminConsole() {
   const [selectedId, setSelectedId] = useState("");
   const [centers, setCenters] = useState<CenterOption[]>([]);
   const [centerFilter, setCenterFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<QueueSummary>({ inbox: 0, queued: 0, ready_to_assign: 0, delivery_issues: 0,
+    approved: 0, rejected: 0, withdrawn: 0, all: 0 });
+  const [actionError, setActionError] = useState("");
+  const pageSize = 25;
   const inventory = useInventory();
   const lowStockCount = inventory.filter(isLow).length;
 
   const refresh = useCallback(async () => {
     const center = centerFilter ? `&center_code=${encodeURIComponent(centerFilter)}` : "";
-    try { setRequests((await getPagedRequests(`/api/workflow/queue?status=all&page_size=100${center}`)).data); } catch (e) { console.error(e); }
-  }, [centerFilter]);
+    try {
+      const result = await getPagedRequests<QueueSummary>(`/api/workflow/queue?status=${tab}&page=${page}&page_size=${pageSize}${center}`);
+      setRequests(result.data); setTotal(result.total);
+      if (result.summary) setSummary(result.summary);
+    } catch (e) { console.error(e); }
+  }, [centerFilter, page, tab]);
   useEffect(() => {
     void refresh();
     void request<CenterOption[]>("/api/centers").then(setCenters).catch(console.error);
@@ -74,18 +85,14 @@ function HqAdminConsole() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const counts = useMemo(() => ({
-    inbox: requests.filter((r) => r.status === "pending" || r.status === "info_requested").length,
-    queued: requests.filter((r) => r.status === "queued").length,
-    approved: requests.filter((r) => r.status === "approved").length,
-    rejected: requests.filter((r) => r.status === "rejected").length,
-    all: requests.length,
-  }), [requests]);
+  const counts = summary;
 
   const filtered = useMemo(() => {
     const byTab = (r: RequestItem) =>
       tab === "all" ? true :
       tab === "inbox" ? (r.status === "pending" || r.status === "info_requested") :
+      tab === "ready_to_assign" ? r.fulfillmentStatus === "ready_to_assign" :
+      tab === "delivery_issues" ? r.receiptStatus === "disputed" :
       r.status === (tab as RequestStatus);
     const q = query.trim().toLowerCase();
     const today = new Date().toDateString();
@@ -110,27 +117,24 @@ function HqAdminConsole() {
       if (!ids.includes(r.id)) return r;
       const at = new Date().toISOString();
       const nextStatus: RequestStatus =
-        action === "approve" ? "awaiting_verification" :
+        action === "approve" ? "approved" :
         action === "reject" ? "rejected" :
         action === "queue" ? "queued" : "info_requested";
       const auditAction = action === "info" ? "info_requested" : action === "approve" ? "approved" : action === "reject" ? "rejected" : "queued";
-      let deductNote = "";
-      if (action === "approve" && r.type === "stationery" && r.items?.length) {
-        deductNote = `\nInventory adjusted: ${r.items.map((i) => `${i.qty}× ${i.name}`).join(", ")}.`;
-      }
       return {
         ...r, status: nextStatus, updatedAt: at,
-        audit: [...r.audit, { at, actor: actorTag(), action: auditAction, note: autoNote(action, note) + deductNote }],
+        audit: [...r.audit, { at, actor: actorTag(), action: auditAction, note: autoNote(action, note) }],
       };
     }));
-    void inventoryStore.deduct();
     setChecked(new Set());
+    setPage(1);
     try {
+      setActionError("");
       await Promise.all(ids.map((id) =>
         request(`/api/workflow/requests/${requests.find((r) => r.id === id)?.dbId}/${action}`, { method: "POST", body: { remarks: note } }),
       ));
     } catch (cause) {
-      console.error("HQ action failed:", cause instanceof Error ? cause.message : cause);
+      setActionError(cause instanceof Error ? cause.message : "HQ action failed");
     } finally {
       await refresh();
     }
@@ -150,8 +154,23 @@ function HqAdminConsole() {
     });
   }, [requests]);
 
+  const assignItem = useCallback(async (item: RequestItem) => {
+    if (!item.dbId) return;
+    if (!window.confirm(`Confirm ${item.id} has been handed over to ${item.employeeName}?`)) return;
+    try {
+      setActionError("");
+      await request(`/api/workflow/requests/${item.dbId}/assign`, { method: "POST", body: { remarks: "Item handed over to employee" } });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Handover could not be saved");
+    } finally { await refresh(); }
+  }, [refresh]);
+
   const kpis = [
     { label: "In your inbox", value: counts.inbox, tone: "amber" as const },
+    { label: "Ready to Assign", value: counts.ready_to_assign, tone: "indigo" as const,
+      onClick: () => { setView("requests"); setTab("ready_to_assign"); setPage(1); } },
+    { label: "Delivery Issues", value: counts.delivery_issues, tone: "rose" as const,
+      onClick: () => { setView("requests"); setTab("delivery_issues"); setPage(1); } },
     { label: "Awaiting Super Admin", value: counts.queued, tone: "indigo" as const },
     { label: "Approved (all time)", value: counts.approved, tone: "emerald" as const },
     { label: "Rejected (all time)", value: counts.rejected, tone: "rose" as const },
@@ -160,8 +179,11 @@ function HqAdminConsole() {
   const tabs: { id: Tab; label: string; icon: typeof Inbox; count: number }[] = [
     { id: "inbox", label: "Inbox", icon: Inbox, count: counts.inbox },
     { id: "queued", label: "Queued · Super Admin", icon: Send, count: counts.queued },
+    { id: "ready_to_assign", label: "Ready to Assign", icon: Package, count: counts.ready_to_assign },
+    { id: "delivery_issues", label: "Delivery Issues", icon: AlertTriangle, count: counts.delivery_issues },
     { id: "approved", label: "Approved", icon: CheckCircle2, count: counts.approved },
     { id: "rejected", label: "Rejected", icon: XCircle, count: counts.rejected },
+    { id: "withdrawn", label: "Withdrawn", icon: Undo2, count: counts.withdrawn },
     { id: "all", label: "All", icon: Filter, count: counts.all },
   ];
 
@@ -187,7 +209,7 @@ function HqAdminConsole() {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
             {kpis.map((k) => <KpiTile key={k.label} {...k} />)}
           </div>
         </div>
@@ -233,7 +255,7 @@ function HqAdminConsole() {
         {view === "requests" && (
           <div className="flex items-center gap-1 border-b border-slate-200 -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
             {tabs.map((t) => (
-              <button key={t.id} type="button" onClick={() => { setTab(t.id); setChecked(new Set()); }}
+              <button key={t.id} type="button" onClick={() => { setTab(t.id); setPage(1); setChecked(new Set()); }}
                 className={`flex items-center gap-2 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px whitespace-nowrap ${
                   tab === t.id ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500"
                 }`}>
@@ -254,8 +276,9 @@ function HqAdminConsole() {
       ) : view === "team" ? (
         <div className="mx-4 sm:mx-6 mt-4"><TeamTab mode="hq" /></div>
       ) : (
-        <HqQueuePanel
+        <>{actionError && <div className="mx-4 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 sm:mx-6">{actionError}</div>}<HqQueuePanel
           filtered={filtered} selected={selected} checked={checked}
+          page={page} pageSize={pageSize} total={total} onPageChange={setPage}
           typeFilter={typeFilter} priorityFilter={priorityFilter} companyFilter={companyFilter} ageFilter={ageFilter}
           sortBy={sortBy} query={query}
           onTypeFilter={setTypeFilter} onPriorityFilter={setPriorityFilter}
@@ -267,8 +290,9 @@ function HqAdminConsole() {
           onToggleCheck={toggleCheck} onSelect={setSelectedId} onClearChecked={() => setChecked(new Set())}
           onBatchQueue={() => void applyAction([...checked], "queue", `Batch-forwarded ${checked.size} requests to Super Admin`)}
           onBatchApprove={() => void applyAction([...checked], "approve", "")}
+          onAssign={(item) => void assignItem(item)}
           onDetailAction={onDetailAction}
-        />
+        /></>
       )}
     </DashboardLayout>
   );
