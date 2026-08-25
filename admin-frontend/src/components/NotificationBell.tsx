@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, Clock3, X } from "lucide-react";
 import { request, type Paged } from "@/lib/api";
+import { fmtDateTime, relTime } from "./requestMeta";
 
 interface Notice {
   id: number;
@@ -95,9 +96,12 @@ export function NotificationBell() {
                 />
                 <span>
                   <span className="text-xs text-slate-700 block">{n.message}</span>
-                  <span className="text-[10px] text-slate-400 mt-1 flex gap-1">
+                  <span
+                    className="text-[10px] text-slate-400 mt-1 flex gap-1"
+                    title={fmtDateTime(n.created_at)}
+                  >
                     <Clock3 className="w-3 h-3" />
-                    {new Date(n.created_at).toLocaleString("en-IN")}
+                    {relTime(n.created_at)} · {fmtDateTime(n.created_at)}
                   </span>
                 </span>
               </button>
