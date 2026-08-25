@@ -107,7 +107,7 @@ function SuperAdmin() {
   const overrideList = useMemo(() => searchedRequests
     .filter(r => companyFilter === "all" || r.company === companyFilter)
     .filter(r => statusFilter === "all" || r.status === statusFilter)
-    .sort((a,b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
+    .sort((a,b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
     [searchedRequests, companyFilter, statusFilter]);
 
   const selected = overrideList.find(r => r.id === selectedId) ?? overrideList[0];

@@ -1,6 +1,6 @@
 import type { RequestItem } from "./models";
 import { typeLabels } from "./models";
-import { typeIcon, priorityTone, statusTone, relTime, fmtINR } from "./requestMeta";
+import { typeIcon, priorityTone, statusTone, relTime, fmtDateTime, fmtINR } from "./requestMeta";
 
 interface Props {
   request: RequestItem;
@@ -65,7 +65,9 @@ export function RequestRow({ request, selected, checked, onToggleCheck, onSelect
           </span>
         </div>
         <div className="flex items-center gap-1 text-[10px] text-slate-400 tabular-nums">
-          <span>{relTime(request.updatedAt)}</span>
+          <span title={`Raised ${fmtDateTime(request.createdAt)}`}>
+            {relTime(request.createdAt)}
+          </span>
           <span className="text-slate-300">›</span>
         </div>
       </div>
