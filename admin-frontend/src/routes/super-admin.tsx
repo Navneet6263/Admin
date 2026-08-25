@@ -110,7 +110,7 @@ function SuperAdmin() {
     .sort((a,b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
     [searchedRequests, companyFilter, statusFilter]);
 
-  const selected = requests.find(r => r.id === selectedId) ?? overrideList[0];
+  const selected = overrideList.find(r => r.id === selectedId) ?? overrideList[0];
 
   const override = useCallback(async (id: string, next: RequestStatus, verb: string, note: string) => {
     setRequests(prev => prev.map(r => {

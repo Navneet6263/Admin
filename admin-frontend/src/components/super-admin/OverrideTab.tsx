@@ -48,7 +48,7 @@ export function OverrideTab({
             <select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
               className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-300">
               <option value="all">All companies</option>
-              {companies.map(c => <option key={c.code} value={c.code}>{c.code} · {c.name}</option>)}
+              {companies.map(c => <option key={c.code} value={c.name}>{c.code} · {c.name}</option>)}
             </select>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as RequestStatus | "all")}
               className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-300">
