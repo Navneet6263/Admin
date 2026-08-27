@@ -68,7 +68,6 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
             </h2>
             <p className="mt-1 text-xs text-slate-500">Live center comparison from requests, approvals and response time.</p>
           </div>
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">Live DB</span>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
