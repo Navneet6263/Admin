@@ -22,7 +22,8 @@ const checks = [
   ["withdrawn status consistency", `SELECT COUNT(*) failures FROM requests
     WHERE workflow_status='withdrawn' AND status<>'withdrawn'`],
   ["standalone Admin role retired", `SELECT COUNT(*) failures FROM users WHERE role='admin'`],
-  ["no blocking verifier stage", `SELECT COUNT(*) failures FROM requests
+  ["verifier role fully retired", `SELECT COUNT(*) failures FROM users WHERE role='verifier'`],
+  ["no legacy verification stage", `SELECT COUNT(*) failures FROM requests
     WHERE workflow_status='awaiting_verification' OR status='awaiting_verification'`],
   ["parallel admin assignments", `SELECT COUNT(*) failures FROM requests r
     WHERE r.workflow_status='awaiting_approval' AND r.status<>'queued' AND (SELECT COUNT(DISTINCT a.role)

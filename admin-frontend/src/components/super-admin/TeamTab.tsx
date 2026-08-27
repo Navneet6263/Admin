@@ -135,10 +135,10 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
     center_admin: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     finance: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     finance_head: 'bg-teal-100 text-teal-800 border-teal-200',
-    verifier: 'bg-violet-100 text-violet-800 border-violet-200',
     employee: 'bg-sky-100 text-sky-800 border-sky-200',
   };
   const globalRole = (role: string) => ['hq_admin', 'super_admin'].includes(role);
+  const centerRole = (role: string) => ['employee', 'center_admin'].includes(role);
 
   const filterOptions = useMemo(() => ({
     roles: [...new Set(users.map((user) => user.role).filter(Boolean))].sort(),
@@ -259,7 +259,7 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
         teams={teams}
         onCreated={fetchUsersAndTeams}
         userApiBase={userApiBase}
-        allowedRoles={isSuperAdmin ? undefined : ['employee', 'center_admin', 'verifier', 'finance', 'finance_head']}
+        allowedRoles={isSuperAdmin ? undefined : ['employee', 'center_admin', 'finance', 'finance_head']}
       />
 
       {/* 3. USERS ROSTER TABLE */}
@@ -330,17 +330,18 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
                     <td className="px-4 py-3 font-mono text-[11px] font-semibold text-slate-700">{u.company}</td>
                     <td className="px-4 py-3">
                       {globalRole(u.role) ? <span className="text-[10px] font-medium text-violet-700">All centers</span>
+                        : !centerRole(u.role) ? <span className="text-[10px] text-slate-400">Not applicable</span>
                         : u.center_code ? <div><span className="font-mono text-[11px] font-semibold text-indigo-700">{u.center_code}</span>{u.center_name && <p className="max-w-40 truncate text-[10px] text-slate-400">{u.center_name}</p>}</div>
                         : <span className="text-[10px] font-medium text-amber-600">Not assigned</span>}
                     </td>
                     <td className="px-4 py-2">
                       {globalRole(u.role) ? <span className="text-[10px] text-slate-400">Not required · global access</span>
-                        : <div className="flex min-w-60 items-center gap-2">
+                        : centerRole(u.role) ? <div className="flex min-w-60 items-center gap-2">
                           <CenterCombobox centers={centers.filter((center) => center.is_active !== false)} value={u.center_code ?? ''}
                             onChange={(code) => void assignCenter(u.id, code)}
                             disabled={assigningId === u.id} placeholder="Search center…" className="w-full" />
                           {assigningId === u.id && <span className="shrink-0 text-[10px] text-indigo-600">Saving…</span>}
-                        </div>}
+                        </div> : <span className="text-[10px] text-slate-400">Not applicable for this role</span>}
                       {u.role === 'center_admin' && <CenterAccessEditor userId={u.id}
                         homeCenter={u.center_code} centers={centers.filter((center) => center.is_active !== false)}
                         apiBase={userApiBase} />}

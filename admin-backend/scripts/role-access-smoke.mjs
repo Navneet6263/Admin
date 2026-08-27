@@ -62,13 +62,6 @@ try {
     pass("HQ Admin cannot impersonate employee receipt", employeeReceipts.status === 403);
   } else console.log("SKIP HQ Admin access: no active account");
 
-  const verifier = await sessionFor(["verifier"]);
-  if (verifier) {
-    const queue = await call("/api/verifier/queue?view=all&page=1&page_size=10", verifier);
-    pass("Verifier paged history", queue.status === 200 && Array.isArray(queue.data.data) && queue.data.summary);
-    pass("Verifier audit history", queue.data.data.every((row) => typeof row.audit === "string" && Array.isArray(JSON.parse(row.audit))));
-  } else console.log("SKIP Verifier access: no active account");
-
   const centerAdmin = await sessionFor(["center_admin"]);
   if (centerAdmin) {
     const queue = await call("/api/workflow/queue?status=all&page=1&page_size=10", centerAdmin);

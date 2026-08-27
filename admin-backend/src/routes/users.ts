@@ -12,10 +12,13 @@ router.get('/', async (_req: Request, res: Response) => {
   try {
     const result = await pool.request().query(`
       SELECT u.id, u.email, u.name, u.role, u.company, u.dept,
-             u.is_active, u.created_at, u.center_code,
-             c.name AS center_name, c.city AS center_city
+             u.is_active, u.created_at,
+             CASE WHEN u.role IN ('employee','center_admin') THEN u.center_code END center_code,
+             CASE WHEN u.role IN ('employee','center_admin') THEN c.name END center_name,
+             CASE WHEN u.role IN ('employee','center_admin') THEN c.city END center_city
       FROM users u
-      LEFT JOIN centers c ON c.code = u.center_code
+      LEFT JOIN centers c ON c.code = u.center_code AND u.role IN ('employee','center_admin')
+      WHERE u.role<>'retired'
       ORDER BY u.id DESC
     `);
     setCache('sa:users', result.recordset);
@@ -37,15 +40,20 @@ router.post('/', async (req: Request, res: Response) => {
   if (invalidPassword) return res.status(400).json({ error: invalidPassword });
 
   const validRoles: Role[] = [
-    'employee', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'verifier', 'super_admin',
+    'employee', 'hq_admin', 'center_admin', 'finance', 'finance_head', 'super_admin',
   ];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid user role' });
+  const centerRole = role === 'center_admin' || role === 'employee';
+  const normalizedCenter = String(center_code || '').trim().toUpperCase();
+  if (!centerRole && normalizedCenter) {
+    return res.status(400).json({ error: 'Center assignment is only available for Employees and Center Admins' });
+  }
   const actorRole = effectiveRole(req.user!.role);
   if (actorRole === 'hq_admin' && ['hq_admin', 'super_admin'].includes(role)) {
     return res.status(403).json({ error: 'Only Super Admin can create HQ or Super Admin accounts' });
   }
-  if ((role === 'center_admin' || role === 'employee') && !String(center_code || '').trim()) {
-    return res.status(400).json({ error: 'center_code is required for this admin role' });
+  if (centerRole && !normalizedCenter) {
+    return res.status(400).json({ error: 'center_code is required for Employees and Center Admins' });
   }
 
   try {
@@ -56,7 +64,7 @@ router.post('/', async (req: Request, res: Response) => {
       .input('role',    mssql.NVarChar(20),  role)
       .input('company', mssql.NVarChar(100), company)
       .input('dept',    mssql.NVarChar(80),  dept.trim())
-      .input('cc',      mssql.NVarChar(10),  center_code || null)
+      .input('cc',      mssql.NVarChar(10),  centerRole ? normalizedCenter : null)
       .input('hash',    mssql.NVarChar(256), passwordHash)
       .query(`
         IF @cc IS NOT NULL AND NOT EXISTS(SELECT 1 FROM centers WHERE code=@cc AND is_active=1)
@@ -91,9 +99,9 @@ router.post('/:id/assign-center', async (req: Request, res: Response) => {
     const target = await tx.request().input('uid', mssql.Int, userId)
       .query(`SELECT role,center_code FROM users WITH(UPDLOCK,ROWLOCK) WHERE id=@uid`);
     if (!target.recordset[0]) { await tx.rollback(); return res.status(404).json({ error: 'User not found' }); }
-    if (['hq_admin','super_admin'].includes(target.recordset[0].role)) {
+    if (!['employee','center_admin'].includes(target.recordset[0].role)) {
       await tx.rollback();
-      return res.status(400).json({ error: 'HQ and Super Admin use global center access' });
+      return res.status(400).json({ error: 'Center assignment is only available for Employees and Center Admins' });
     }
     const center = await tx.request().input('cc', mssql.NVarChar(10), center_code)
       .query(`SELECT code,name,city FROM centers WHERE code=@cc AND is_active=1`);
@@ -144,7 +152,8 @@ router.get('/unassigned', async (_req: Request, res: Response) => {
     const result = await pool.request().query(`
       SELECT u.id, u.name, u.email, u.role, u.dept
       FROM users u
-      WHERE u.center_code IS NULL OR u.center_code = ''
+      WHERE u.role IN ('employee','center_admin')
+        AND (u.center_code IS NULL OR u.center_code = '')
       ORDER BY u.name
     `);
     res.json(result.recordset);

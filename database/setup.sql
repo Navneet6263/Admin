@@ -58,7 +58,7 @@ CREATE TABLE users (
   email      NVARCHAR(100) UNIQUE NOT NULL,
   name       NVARCHAR(100) NOT NULL,
   role       NVARCHAR(20)  NOT NULL CHECK (role IN (
-               'employee','admin','hq_admin','center_admin','finance','finance_head','verifier','super_admin')),
+               'employee','admin','hq_admin','center_admin','finance','finance_head','super_admin')),
   company    NVARCHAR(8)   NOT NULL DEFAULT 'VT',   -- VT / VR / VM / VL
   dept       NVARCHAR(80)  NOT NULL DEFAULT '',
   password_hash NVARCHAR(256) NOT NULL,

@@ -9,7 +9,6 @@ export type Role =
   | 'center_admin'
   | 'finance'
   | 'finance_head'
-  | 'verifier'
   | 'super_admin';
 
 export type AuthUser = {
@@ -83,7 +82,8 @@ export async function revokeSession(req: Request) {
 async function readSession(token?: string): Promise<AuthUser | null> {
   if (!token || !/^[A-Za-z0-9_-]{40,100}$/.test(token)) return null;
   const result = await pool.request().input('hash', mssql.Char(64), sessionHash(token))
-    .query(`SELECT u.id,u.email,u.name,u.role,u.company,u.dept,u.center_code
+    .query(`SELECT u.id,u.email,u.name,u.role,u.company,u.dept,
+        CASE WHEN u.role IN ('employee','center_admin') THEN u.center_code END center_code
       FROM auth_sessions s JOIN users u ON u.id=s.user_id
       WHERE s.token_hash=@hash AND s.revoked_at IS NULL
         AND s.expires_at>SYSUTCDATETIME() AND u.is_active=1`);
@@ -129,7 +129,9 @@ export function requireAssignedCenter(req: Request, res: Response, next: NextFun
 
 export async function login(email: string, password: string): Promise<AuthUser | null> {
   const result = await pool.request().input('email', mssql.NVarChar(254), email.trim().toLowerCase())
-    .query(`SELECT id,email,name,role,company,dept,center_code,password_hash FROM users WHERE email=@email AND is_active=1`);
+    .query(`SELECT id,email,name,role,company,dept,
+      CASE WHEN role IN ('employee','center_admin') THEN center_code END center_code,password_hash
+      FROM users WHERE email=@email AND is_active=1`);
   const row = result.recordset[0];
   const stored = row?.password_hash || dummyPasswordHash;
   if (!verifyPassword(password, stored) || !row) return null;

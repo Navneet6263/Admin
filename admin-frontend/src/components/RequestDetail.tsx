@@ -3,7 +3,7 @@ import type { RequestItem } from "./models";
 import { typeLabels } from "./models";
 import { typeIcon, priorityTone, statusTone, fmtDateTime, fmtINR, relTime } from "./requestMeta";
 import { detailRows } from "./RequestForms";
-import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, ShieldCheck, Undo2, Download } from "lucide-react";
+import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, Download } from "lucide-react";
 import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
 import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
 import type { BusinessCardDetails } from "./business-card/businessCardTemplates";
@@ -13,30 +13,24 @@ import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
 
 interface Props {
   request: RequestItem;
-  onAction?: (id: string, action: "approve" | "reject" | "queue" | "info" | "verify" | "send_back", note: string) => void;
+  onAction?: (id: string, action: "approve" | "reject" | "queue" | "info", note: string) => void;
   readOnly?: boolean;
-  /** When true, show verifier-only actions (Verify & Close / Send back to Admin). */
-  mode?: "admin" | "verifier" | "finance";
 }
 
-type Mode = null | "approve" | "reject" | "queue" | "info" | "verify" | "send_back";
+type Mode = null | "approve" | "reject" | "queue" | "info";
 
-export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "admin" }: Props) {
+export function RequestDetail({ request, onAction, readOnly }: Props) {
   const [mode, setMode] = useState<Mode>(null);
   const [note, setNote] = useState("");
   const Icon = typeIcon[request.type];
   const pri = priorityTone[request.priority];
   const st = statusTone[request.status];
-  const isVerifierStage = request.status === "awaiting_verification";
   const isAdminStage = request.status === "pending" || request.status === "queued" || request.status === "info_requested";
-  const canActAdmin = viewMode === "admin" && isAdminStage;
-  const canActFinance = viewMode === "finance" && isAdminStage;
-  const canActVerifier = viewMode === "verifier" && isVerifierStage;
-  const isOpen = !readOnly && !!onAction && (canActAdmin || canActFinance || canActVerifier);
+  const isOpen = !readOnly && !!onAction && isAdminStage;
 
   const submit = () => {
     if (!mode || !onAction) return;
-    if ((mode === "reject" || mode === "send_back") && !note.trim()) return;
+    if (mode === "reject" && !note.trim()) return;
     onAction(request.id, mode, note.trim());
     setNote(""); setMode(null);
   };
@@ -46,8 +40,6 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
     reject:    { title: "Reject request", hint: "Reason is mandatory and shared with the employee.", cta: "Confirm rejection", required: true, ctaCls: "bg-rose-600 hover:bg-rose-700" },
     queue:     { title: "Queue for Super Admin", hint: "Add context for Super Admin review.", cta: "Forward to Super Admin", required: false, ctaCls: "bg-indigo-600 hover:bg-indigo-700" },
     info:      { title: "Request more info", hint: "Ask the employee to clarify.", cta: "Send to employee", required: false, ctaCls: "bg-slate-900 hover:bg-black" },
-    verify:    { title: "Verify & close", hint: "Confirm bills / delivery match the approved request.", cta: "Verify & close request", required: false, ctaCls: "bg-violet-600 hover:bg-violet-700" },
-    send_back: { title: "Send back to Admin", hint: "Reason mandatory — admin will re-review.", cta: "Return to Admin", required: true, ctaCls: "bg-amber-600 hover:bg-amber-700" },
   };
 
   return (
@@ -181,11 +173,6 @@ export function RequestDetail({ request, onAction, readOnly, mode: viewMode = "a
                 {cfg[mode].cta}
               </button>
             </div>
-          ) : canActVerifier ? (
-            <div className="grid grid-cols-2 gap-1.5 p-3">
-              <ActionBtn icon={ShieldCheck} label="Verify & close" onClick={() => setMode("verify")} tone="violet" />
-              <ActionBtn icon={Undo2} label="Send back" onClick={() => setMode("send_back")} tone="amber" />
-            </div>
           ) : (
             <div className="grid grid-cols-4 gap-1.5 p-3">
               <ActionBtn icon={Check} label="Approve" onClick={() => setMode("approve")} tone="emerald" />
@@ -237,8 +224,6 @@ const toneMap = {
   rose: "text-rose-700 hover:bg-rose-50 border-rose-100",
   indigo: "text-indigo-700 hover:bg-indigo-50 border-indigo-100",
   slate: "text-slate-700 hover:bg-slate-100 border-slate-200",
-  violet: "text-violet-700 hover:bg-violet-50 border-violet-100",
-  amber: "text-amber-700 hover:bg-amber-50 border-amber-100",
 } as const;
 
 function ActionBtn({ icon: Icon, label, onClick, tone }: { icon: typeof Check; label: string; onClick: () => void; tone: keyof typeof toneMap }) {

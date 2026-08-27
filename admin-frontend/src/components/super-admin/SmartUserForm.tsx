@@ -40,15 +40,6 @@ const ROLE_CARDS = [
     active: 'border-slate-600 bg-slate-100 ring-2 ring-slate-400',
   },
   {
-    role: 'verifier',
-    label: 'Audit Reviewer',
-    sub: 'Read-only access to historical verification and audit records.',
-    icon: '🔍',
-    color: 'violet',
-    border: 'border-violet-200 bg-violet-50',
-    active: 'border-violet-500 bg-violet-100 ring-2 ring-violet-300',
-  },
-  {
     role: 'finance',
     label: 'Finance Executive',
     sub: 'Reviews recorded expenses after operations are already complete.',
@@ -108,7 +99,7 @@ export function SmartUserForm({
   const selectedCard = ROLE_CARDS.find(c => c.role === role);
 
   const needsCenter  = role === 'center_admin' || role === 'employee';
-  const needsDept    = role === 'employee' || role === 'finance' || role === 'finance_head' || role === 'verifier';
+  const needsDept    = role === 'employee' || role === 'finance' || role === 'finance_head';
   const needsCompany = role !== 'super_admin';
 
   const handleStep1 = (r: RoleKey) => {

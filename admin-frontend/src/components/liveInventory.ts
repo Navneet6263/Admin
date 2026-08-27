@@ -11,7 +11,7 @@ export type MovementSource = 'seed' | 'restock' | 'add_item' | 'adjustment' | 'r
 export interface StockMovement { id: string; at: string; sku: string; name: string; category: InventoryItem['category']; direction: MovementDirection; qty: number; balanceAfter: number; source: MovementSource; refId?: string; actor?: string; note?: string; }
 
 let items: InventoryItem[] = [], movements: StockMovement[] = [];
-const movementRoles = new Set(['hq_admin', 'center_admin', 'verifier', 'finance', 'finance_head', 'super_admin']);
+const movementRoles = new Set(['hq_admin', 'center_admin', 'finance', 'finance_head', 'super_admin']);
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach(listener => listener());
 const asItem = (row: Record<string, unknown>): InventoryItem => ({ sku: String(row.sku), name: String(row.name), category: row.category as InventoryItem['category'], unit: String(row.unit), price: Number(row.price ?? 0), qty: Number(row.qty ?? 0), threshold: Number(row.threshold ?? 0) });

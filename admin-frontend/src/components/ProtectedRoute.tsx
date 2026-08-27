@@ -8,7 +8,6 @@ type AppRole =
   | 'center_admin'
   | 'finance'
   | 'finance_head'
-  | 'verifier'
   | 'super_admin';
 
 const homeByRole: Record<AppRole, string> = {
@@ -17,7 +16,6 @@ const homeByRole: Record<AppRole, string> = {
   center_admin: '/center-admin',
   finance: '/finance',
   finance_head: '/finance',
-  verifier: '/verifier',
   super_admin: '/super-admin',
 };
 

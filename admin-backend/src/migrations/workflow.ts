@@ -1,6 +1,7 @@
 import mssql from "mssql";
 import { ensureInventoryCatalog } from "./inventoryCatalog";
 import { ensureFulfillmentSchema } from "./fulfillment";
+import { retireVerifierRole } from "./retireVerifier";
 
 const statements = [
   `UPDATE users SET role='hq_admin' WHERE role='admin';
@@ -13,7 +14,7 @@ const statements = [
       WHERE cc.parent_object_id=OBJECT_ID('users') AND c.name='role';
     IF @roleConstraint IS NOT NULL EXEC('ALTER TABLE users DROP CONSTRAINT ['+@roleConstraint+']');
     ALTER TABLE users ADD CONSTRAINT CK_users_role_current CHECK(role IN
-      ('employee','hq_admin','center_admin','finance','finance_head','verifier','super_admin'));
+      ('employee','hq_admin','center_admin','finance','finance_head','verifier','super_admin','retired'));
   END`,
   `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID('requests') AND definition LIKE '%withdrawn%') BEGIN
     DECLARE @requestStatusConstraint sysname;
@@ -157,7 +158,7 @@ const statements = [
   `INSERT INTO approvals(request_id,actor_id,action,note,created_at)
     SELECT r.id,r.user_id,'raised','Request raised by employee',r.created_at FROM requests r
     WHERE NOT EXISTS(SELECT 1 FROM approvals a WHERE a.request_id=r.id AND a.action='raised')`,
-  `UPDATE request_assignments SET can_act=0 WHERE role='verifier' OR request_id IN
+  `UPDATE request_assignments SET can_act=0 WHERE request_id IN
       (SELECT id FROM requests WHERE workflow_status<>'awaiting_approval');
     INSERT INTO request_assignments(request_id,center_code,role,assignment_type,can_act)
       SELECT r.id,r.approval_center_code,'center_admin','owner',1 FROM requests r
@@ -188,5 +189,6 @@ const statements = [
 export async function ensureWorkflowSchema(pool: mssql.ConnectionPool) {
   for (const sql of statements) await pool.request().query(sql);
   await ensureFulfillmentSchema(pool);
+  await retireVerifierRole(pool);
   await ensureInventoryCatalog(pool);
 }

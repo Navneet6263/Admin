@@ -73,7 +73,7 @@ if (role === 'employee') {
   });
   expect('employee self-center change blocked', selfCenterChange.response.status, 403);
 }
-if (role === 'finance' || role === 'finance_head' || role === 'verifier') {
+if (role === 'finance' || role === 'finance_head') {
   const broadRequests = await call('/api/requests', { headers: { Cookie: cookie } });
   expect(`${role} blocked from broad request API`, broadRequests.response.status, 403);
 }

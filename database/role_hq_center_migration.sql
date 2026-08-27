@@ -23,7 +23,6 @@ ALTER TABLE users ADD CONSTRAINT CK_users_role CHECK (
     'center_admin',
     'finance',
     'finance_head',
-    'verifier',
     'super_admin'
   )
 );
