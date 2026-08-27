@@ -12,6 +12,7 @@ import { request, type Paged } from '@/lib/api';
 import { useSessionUser } from '@/lib/useSessionUser';
 import { PaginationBar } from '@/components/PaginationBar';
 import { CenterCombobox } from '@/components/CenterCombobox';
+import { PanelLoadingSkeleton } from '@/components/LoadingSkeletons';
 
 type Tab = 'overview' | 'approvals' | 'activity' | 'inventory';
 type QueueFilter = 'awaiting_approval' | 'ready_to_assign' | 'approved' | 'rejected' | 'withdrawn' | 'all';
@@ -120,7 +121,7 @@ function CenterAdminDashboard() {
           </div>
         </div>
         {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</div>}
-        {loading && !overview ? <div className="rounded-xl border border-slate-200 bg-white py-24 text-center text-xs text-slate-400">Loading center operations…</div> : <>
+        {loading && !overview ? <PanelLoadingSkeleton /> : <>
           {tab === 'overview' && overview && <CenterOverview data={overview} activity={activity} />}
           {tab === 'approvals' && <section>
             <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['ready_to_assign','Ready to assign'],['approved','Approved'],['rejected','Rejected'],['withdrawn','Withdrawn'],['all','All history']] as const).map(([value,label]) =>

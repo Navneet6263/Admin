@@ -10,6 +10,7 @@ import type { FinanceHeadData } from '@/components/finance/types';
 import { protectedRoute } from '@/components/ProtectedRoute';
 import { request } from '@/lib/api';
 import { useSessionUser } from '@/lib/useSessionUser';
+import { PanelLoadingSkeleton } from '@/components/LoadingSkeletons';
 
 type Tab = 'overview' | 'queue' | 'ledger' | 'activity';
 
@@ -61,5 +62,5 @@ function FinanceConsole() {
 }
 
 function Loading() {
-  return <div className="rounded-xl border border-slate-200 bg-white py-24 text-center text-xs text-slate-400">Loading Finance Head controls…</div>;
+  return <PanelLoadingSkeleton />;
 }

@@ -22,6 +22,7 @@ import { TeamTab } from "@/components/super-admin/TeamTab";
 import { CentersAssignmentPanel } from "@/components/super-admin/CentersPanel";
 import { PolicyTab } from "@/components/super-admin/PolicyTab";
 import { protectedRoute } from "@/components/ProtectedRoute";
+import { PanelLoadingSkeleton } from "@/components/LoadingSkeletons";
 
 export const Route = createFileRoute("/super-admin")({
   head: () => ({
@@ -43,6 +44,7 @@ function SuperAdmin() {
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
   const [actionError, setActionError] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Centers state
   const [centerUsers, setCenterUsers] = useState<UserRow[]>([]);
@@ -63,7 +65,9 @@ function SuperAdmin() {
 
   const refresh = useCallback(async () => {
     const center = scopeCenter ? `?center_code=${encodeURIComponent(scopeCenter)}` : "";
-    try { setRequests(await getRequests(`/api/requests${center}`)); } catch (error) { console.error(error); }
+    try { setRequests(await getRequests(`/api/requests${center}`)); }
+    catch (error) { console.error(error); }
+    finally { setInitialLoading(false); }
   }, [scopeCenter]);
 
   useEffect(() => { if (sessionUser) setAuthenticated(true); }, [sessionUser]);
@@ -218,10 +222,11 @@ function SuperAdmin() {
 
       <div className="px-4 sm:px-6 pb-10">
         {actionError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{actionError}</div>}
-        {tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}
-        {tab === "analytics" && <AnalyticsTab requests={searchedRequests} history={buildHistory(searchedRequests)} centerCode={scopeCenter} />}
+        {initialLoading && ["overview", "analytics", "override", "anomalies"].includes(tab) && <PanelLoadingSkeleton />}
+        {!initialLoading && tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}
+        {!initialLoading && tab === "analytics" && <AnalyticsTab requests={searchedRequests} history={buildHistory(searchedRequests)} centerCode={scopeCenter} />}
         {tab === "inventory" && <InventoryTab searchQuery={centerSearch} />}
-        {tab === "override" && (
+        {!initialLoading && tab === "override" && (
           <OverrideTab
             list={overrideList} selected={selected}
             companyFilter={companyFilter} setCompanyFilter={setCompanyFilter}
@@ -229,7 +234,7 @@ function SuperAdmin() {
             onSelect={setSelectedId} onAction={onDetailAction}
           />
         )}
-        {tab === "anomalies" && <AnomaliesTab requests={searchedRequests} />}
+        {!initialLoading && tab === "anomalies" && <AnomaliesTab requests={searchedRequests} />}
         {tab === "team" && <TeamTab searchQuery={centerSearch} />}
         {tab === "policies" && <PolicyTab />}
         {tab === "centers" && (

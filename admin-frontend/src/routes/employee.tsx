@@ -11,6 +11,7 @@ import { PaginationBar } from "@/components/PaginationBar";
 import { Plus, Inbox, Send, CheckCircle2, XCircle, Sparkles, AlertTriangle, X, Undo2 } from "lucide-react";
 import { protectedRoute } from "@/components/ProtectedRoute";
 import { ReceiptConfirmationDialog, type ReceiptPrompt } from "@/components/employee/ReceiptConfirmationDialog";
+import { MasterDetailLoadingSkeleton } from "@/components/LoadingSkeletons";
 
 export const Route = createFileRoute("/employee")({
   head: () => ({
@@ -41,6 +42,7 @@ function EmployeeConsole() {
   const [summary, setSummary] = useState<RequestSummary>({ active: 0, queued: 0, approved: 0, rejected: 0, withdrawn: 0, all: 0 });
   const [reloadKey, setReloadKey] = useState(0);
   const [pendingReceipts, setPendingReceipts] = useState<ReceiptPrompt[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const pageSize = 25;
 
   const refresh = useCallback(async () => {
@@ -59,6 +61,7 @@ function EmployeeConsole() {
       if (centerList.status === "fulfilled") setCenters(centerList.value);
       else console.error("Unable to refresh centers", centerList.reason);
     } catch (error) { console.error(error); }
+    finally { setInitialLoading(false); }
   }, [page, reloadKey, tab]);
   useEffect(() => { void refresh(); }, [refresh]);
   const loadReceipts = useCallback(async () => {
@@ -241,14 +244,14 @@ function EmployeeConsole() {
         </div>
 
         {/* Main Master-Detail view */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
+        {initialLoading ? <MasterDetailLoadingSkeleton /> : <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
           <div className="lg:col-span-5 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
             <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500 font-medium">
               <span>{total} requests</span>
               <span>Sorted by priority & date</span>
             </div>
             <PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
-            <div className="divide-y divide-slate-100 overflow-y-auto max-h-[560px]">
+            <div className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400">
                   No requests found in this view.
@@ -280,7 +283,7 @@ function EmployeeConsole() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Confirmation Modal for Request Withdrawal */}

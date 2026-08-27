@@ -139,13 +139,22 @@
 }
 
 @layer base {
+  html {
+    min-height: 100%;
+    overflow-y: scroll;
+    overscroll-behavior-y: auto;
+    scrollbar-gutter: stable;
+  }
+
   * {
     border-color: var(--color-border);
   }
 
   body {
+    min-height: 100vh;
     background-color: var(--color-background);
     color: var(--color-foreground);
+    overscroll-behavior-y: auto;
   }
 }
 

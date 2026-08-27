@@ -5,6 +5,7 @@ import { SmartUserForm } from "./SmartUserForm";
 import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
 import { PaginationBar } from "@/components/PaginationBar";
 import { CenterAccessEditor } from "./CenterAccessEditor";
+import { TableLoadingSkeleton } from "@/components/LoadingSkeletons";
 
 interface TeamTabProps {
   mode?: 'super' | 'hq';
@@ -299,9 +300,9 @@ export function TeamTab({ mode = 'super', searchQuery = '' }: TeamTabProps) {
         {assignmentError && <div className="border-b border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">{assignmentError}</div>}
 
         {loading ? (
-          <div className="p-8 text-center text-xs text-slate-500">Loading user roster from database...</div>
+          <TableLoadingSkeleton rows={8} columns={7} />
         ) : (
-          <div className="max-h-[560px] overflow-auto overscroll-contain">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-200 shadow-[0_1px_0_0_rgb(226_232_240)]">
                 <tr>

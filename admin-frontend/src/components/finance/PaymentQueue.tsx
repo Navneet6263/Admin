@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PaymentCard, type PaymentRow } from '@/components/payments/PaymentCard';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { request, type Paged } from '@/lib/api';
+import { TableLoadingSkeleton } from '@/components/LoadingSkeletons';
 
 export function PaymentQueue({ defaultStatus = 'all' }: { defaultStatus?: string }) {
   const [rows, setRows] = useState<PaymentRow[]>([]);
@@ -41,7 +42,7 @@ export function PaymentQueue({ defaultStatus = 'all' }: { defaultStatus?: string
           <button key={value} type="button" onClick={() => { setStatus(value); setPage(1); }} className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold ${status === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}
       </div>
       {error && <div className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</div>}
-      {loading ? <div className="py-24 text-center text-xs text-slate-400">Loading secure payment queue…</div> :
+      {loading ? <div className="p-4"><TableLoadingSkeleton rows={5} columns={4} /></div> :
         <div className="grid gap-3 bg-slate-50/60 p-4 lg:grid-cols-2">{rows.map((row) => <PaymentCard key={row.request_id} row={row} onDone={() => void load()} />)}</div>}
       {!loading && !rows.length && <div className="py-20 text-center text-xs text-slate-400">No payments in this queue.</div>}
       <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500">

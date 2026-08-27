@@ -94,7 +94,7 @@ export function InventoryTab({ searchQuery = "" }: { searchQuery?: string }) {
             <button type="button" onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"><Plus className="h-3.5 w-3.5" /> Add item</button>
           </div>
         </div>
-        <div className="overflow-auto max-h-[520px]">
+        <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider sticky top-0">
               <tr>

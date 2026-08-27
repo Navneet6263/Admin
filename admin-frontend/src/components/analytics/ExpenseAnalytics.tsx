@@ -55,7 +55,7 @@ export function ExpenseAnalytics({ centerCode = "" }: { centerCode?: string }) {
           </button>
         )}
       </div>
-      <div className="max-h-[480px] overflow-auto overscroll-contain rounded-md border border-slate-100">
+      <div className="overflow-x-auto rounded-md border border-slate-100">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 text-slate-500 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
             <tr>

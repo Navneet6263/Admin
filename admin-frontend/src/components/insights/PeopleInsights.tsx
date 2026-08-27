@@ -160,7 +160,7 @@ export function PeopleInsights({ requests, financialYearStart = currentFinancial
               )}
             </div>
           </div>
-          <div className="max-h-[520px] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+          <div className="divide-y divide-slate-100">
             {filteredStats.map((s) => {
               const rank = stats.findIndex((row) => row.id === s.id) + 1;
               const pct = (s.approvedSpend / maxApproved) * 100;

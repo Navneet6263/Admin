@@ -14,6 +14,7 @@ import { getPagedRequests, request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2 } from "lucide-react";
 import { protectedRoute } from "@/components/ProtectedRoute";
+import { MasterDetailLoadingSkeleton } from "@/components/LoadingSkeletons";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -66,6 +67,7 @@ function HqAdminConsole() {
   const [summary, setSummary] = useState<QueueSummary>({ inbox: 0, queued: 0, ready_to_assign: 0, delivery_issues: 0,
     approved: 0, rejected: 0, withdrawn: 0, all: 0 });
   const [actionError, setActionError] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
   const pageSize = 25;
   const inventory = useInventory();
   const lowStockCount = inventory.filter(isLow).length;
@@ -77,6 +79,7 @@ function HqAdminConsole() {
       setRequests(result.data); setTotal(result.total);
       if (result.summary) setSummary(result.summary);
     } catch (e) { console.error(e); }
+    finally { setInitialLoading(false); }
   }, [centerFilter, page, tab]);
   useEffect(() => {
     void refresh();
@@ -275,6 +278,8 @@ function HqAdminConsole() {
         <div className="mx-4 sm:mx-6 mt-4"><ExpenseAnalytics centerCode={centerFilter} /></div>
       ) : view === "team" ? (
         <div className="mx-4 sm:mx-6 mt-4"><TeamTab mode="hq" /></div>
+      ) : initialLoading ? (
+        <div className="mx-4 mt-4 sm:mx-6"><MasterDetailLoadingSkeleton /></div>
       ) : (
         <>{actionError && <div className="mx-4 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 sm:mx-6">{actionError}</div>}<HqQueuePanel
           filtered={filtered} selected={selected} checked={checked}

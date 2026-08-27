@@ -21,7 +21,7 @@ export function CenterInventoryTable({ rows }: { rows: CenterInventoryRow[] }) {
             className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs outline-none focus:border-slate-400 focus:bg-white" />
         </div>
       </div>
-      <div className="max-h-[620px] overflow-auto">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-xs">
           <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
             <tr>{['SKU', 'Item', 'Category', 'On hand', 'Reserved', 'Available', 'Status', 'Stock value'].map((title) =>

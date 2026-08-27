@@ -3,6 +3,7 @@ import { LogOut, Search, Command, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { NotificationBell } from "./NotificationBell";
 import { session } from "@/lib/api";
+import { displayInitials, displayName, displayRole } from "@/lib/identityDisplay";
 
 export interface WorkspaceTab {
   key: string;
@@ -35,7 +36,11 @@ export function DashboardLayout({
 }: Props) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchOpen, setSearchOpen] = useState(false); const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  const initials = currentUser.split(" ").map((n) => n[0]).join("").slice(0, 2);
+  const apiUser = session.user;
+  const fullName = apiUser?.name || currentUser;
+  const shownName = displayName(fullName);
+  const shownRole = displayRole(apiUser?.role, role);
+  const initials = displayInitials(fullName);
 
   // Keyboard shortcut Ctrl+K / Cmd+K to focus search input
   useEffect(() => {
@@ -107,17 +112,17 @@ export function DashboardLayout({
 
         <div className="ml-auto flex items-center gap-2">
           <NotificationBell />
-          <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 grid place-items-center text-[10px] font-semibold text-white">
+          <div className="hidden min-w-0 items-center gap-2.5 border-l border-slate-200 pl-3 sm:flex">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-[10px] font-semibold text-white">
               {initials}
             </div>
             <div className="min-w-0 leading-tight">
-              <p className="text-xs font-medium text-slate-800 truncate max-w-[140px]">{currentUser}</p>
-              <p className="text-[10px] text-slate-400">{role}</p>
+              <p title={fullName} className="max-w-[220px] truncate text-xs font-medium text-slate-800">{shownName}</p>
+              <p className="max-w-[220px] truncate text-[10px] text-slate-400">{shownRole}</p>
             </div>
           </div>
           <button type="button" onClick={() => void session.logout().finally(() => window.location.replace('/'))}
-            className="w-8 h-8 grid place-items-center rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-900" title="Sign out">
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900" title="Sign out">
             <LogOut className="w-4 h-4" strokeWidth={1.75} />
           </button>
         </div>

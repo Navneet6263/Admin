@@ -4,6 +4,7 @@ import { AnalyticsTab } from "@/components/super-admin/AnalyticsTab";
 import { buildHistory, fmtINR } from "@/components/super-admin/shared";
 import type { RequestItem } from "@/components/models";
 import { request } from "@/lib/api";
+import { TableLoadingSkeleton } from "@/components/LoadingSkeletons";
 
 interface CenterPerformance {
   code: string;
@@ -77,7 +78,7 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
           <Metric icon={IndianRupee} label="Recorded spend" value={fmtINR(totals.spend)} />
         </div>
 
-        <div className="request-scrollbar mt-5 max-h-80 overflow-auto rounded-lg border border-slate-200">
+        {loading ? <div className="mt-5"><TableLoadingSkeleton rows={5} columns={5} /></div> : <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
               <tr><th className="px-4 py-2.5">Rank / Center</th><th className="px-4 py-2.5">Volume</th><th className="px-4 py-2.5">Approval</th><th className="px-4 py-2.5">Avg response</th><th className="px-4 py-2.5 text-right">Spend</th></tr>
@@ -98,7 +99,7 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
               {!loading && visible.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">No performance data for this center yet.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </div>}
       </div>
 
       <AnalyticsTab requests={requests} history={history} centerCode={centerCode} />
