@@ -41,11 +41,12 @@ export function visionIndiaIdCardSvg(side: IdCardSide, details: IdCardDetails) {
     <path d="M165 0h375v92H250c-50 0-85-42-85-92z" fill="url(#red)"/><g transform="translate(40 112)">${logo}</g>
     <rect x="170" y="225" width="200" height="235" rx="4" fill="#8f8f8f"/>
     ${details.photoDataUrl ? `<image href="${xml(details.photoDataUrl)}" x="170" y="225" width="200" height="235" preserveAspectRatio="xMidYMid meet" clip-path="url(#photo)"/>` : `<text x="270" y="350" text-anchor="middle" fill="#fff" font-family="Arial" font-size="20">PHOTO</text>`}
-    <g font-family="Arial,sans-serif" fill="#111" font-size="22">
-    <text x="65" y="535" font-weight="700">Name</text><text x="235" y="535">:</text><text>${tspans(details.name, 260, 535, 18)}</text>
-    <text x="65" y="605" font-weight="700">Employee Code</text><text x="235" y="605">:</text><text x="260" y="605">${xml(details.employeeCode)}</text>
-    <text x="65" y="675" font-weight="700">Designation</text><text x="235" y="675">:</text><text>${tspans(details.designation, 260, 675, 18)}</text>
-    <text x="65" y="745" font-weight="700">Department</text><text x="235" y="745">:</text><text>${tspans(details.department, 260, 745, 18)}</text></g>`);
+    <g font-family="Arial,sans-serif" fill="#111">
+    <g font-size="21" font-weight="700" text-anchor="end"><text x="225" y="530">Name</text><text x="225" y="598">Employee Code</text><text x="225" y="666">Designation</text><text x="225" y="734">Department</text></g>
+    <g font-size="22"><text x="238" y="530">:</text><text>${tspans(details.name, 260, 530, 18)}</text>
+    <text x="238" y="598">:</text><text x="260" y="598">${xml(details.employeeCode)}</text>
+    <text x="238" y="666">:</text><text>${tspans(details.designation, 260, 666, 18)}</text>
+    <text x="238" y="734">:</text><text>${tspans(details.department, 260, 734, 18)}</text></g></g>`);
   return base(`
     <g transform="translate(52 120) scale(.9)">${logo}</g>
     <g font-family="Arial,sans-serif" fill="#151515"><text x="80" y="310" font-size="27">Vision India Services Pvt Ltd</text>

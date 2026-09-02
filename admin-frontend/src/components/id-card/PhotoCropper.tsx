@@ -26,6 +26,11 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
       VIEW_H / 2 - (VIEW_H / 2 - offset.top) * ratio, width, height));
     setZoom(next);
   };
+  const positionAt = (nextZoom: number, alignTop = false) => {
+    const width = natural.width * base * nextZoom; const height = natural.height * base * nextZoom;
+    setZoom(nextZoom); setOffset(clamp((VIEW_W - width) / 2, alignTop ? 0 : (VIEW_H - height) / 2, width, height));
+  };
+  const fillZoom = Math.max(1, VIEW_W / (natural.width * base), VIEW_H / (natural.height * base));
   const apply = () => {
     const image = imageRef.current; if (!image) return;
     const canvas = document.createElement("canvas");
@@ -52,11 +57,12 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
             const nextBase = Math.min(VIEW_W / next.width, VIEW_H / next.height); setNatural(next); setZoom(1);
             setOffset({ left: (VIEW_W - next.width * nextBase) / 2, top: (VIEW_H - next.height * nextBase) / 2 }); }} />
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Optional zoom</label>
-        <button type="button" onClick={() => { setZoom(1); setOffset({ left: (VIEW_W - natural.width * base) / 2, top: (VIEW_H - natural.height * base) / 2 }); }}
-          className="text-[10px] font-semibold text-indigo-300 hover:text-indigo-200">Fit full photo</button>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <button type="button" onClick={() => positionAt(1)} className="rounded-lg border border-white/15 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-white/10">Full photo</button>
+        <button type="button" onClick={() => positionAt(fillZoom)} className="rounded-lg border border-indigo-400/40 bg-indigo-500/15 px-2 py-2 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-500/25">Crop to fill</button>
+        <button type="button" onClick={() => positionAt(zoom, true)} className="rounded-lg border border-white/15 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-white/10">Keep head visible</button>
       </div>
+      <label className="mt-4 block text-[10px] font-bold uppercase tracking-widest text-slate-400">Fine zoom</label>
       <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => changeZoom(Number(event.target.value))} className="mt-2 w-full accent-indigo-500" />
       <div className="mt-4 flex gap-2"><button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-white/15 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10">Cancel</button>
         <button type="button" onClick={apply} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"><Check className="h-4 w-4" /> Use this crop</button></div>
