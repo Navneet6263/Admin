@@ -5,7 +5,7 @@ import { pool } from "../db";
 import { completeApproval } from "../services/approval";
 import { notify, notifyRole } from "../services/notifications";
 import { readWorkflowQueue } from "../services/workflowQueue";
-import { markAssigned } from "../services/fulfillment";
+import { markAssigned, resolveDeliveryIssue } from "../services/fulfillment";
 
 const router = Router();
 router.use(requireAssignedCenter);
@@ -177,6 +177,19 @@ router.post("/requests/:id/assign", async (req, res) => {
     console.error(error);
     const message = error instanceof Error ? error.message : "Assignment failed";
     res.status(/already assigned|not ready/i.test(message) ? 409
+      : /do not have access/i.test(message) ? 403 : 500).json({ error: message });
+  }
+});
+
+router.post("/requests/:id/resolve-delivery", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid request ID" });
+  try {
+    res.json({ success: true, ...(await resolveDeliveryIssue(id, req.user!, req.body?.remarks || "")) });
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : "Delivery issue resolution failed";
+    res.status(/already resolved|not available/i.test(message) ? 409
       : /do not have access/i.test(message) ? 403 : 500).json({ error: message });
   }
 });

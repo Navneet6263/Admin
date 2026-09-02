@@ -42,7 +42,7 @@ function SuperAdmin() {
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [companyFilter, setCompanyFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | "delivery_issues" | "all">("all");
   const [actionError, setActionError] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -114,7 +114,8 @@ function SuperAdmin() {
 
   const overrideList = useMemo(() => searchedRequests
     .filter(r => companyFilter === "all" || r.company === companyFilter)
-    .filter(r => statusFilter === "all" || r.status === statusFilter)
+    .filter(r => statusFilter === "all" ||
+      (statusFilter === "delivery_issues" ? r.receiptStatus === "disputed" : r.status === statusFilter))
     .sort((a,b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
     [searchedRequests, companyFilter, statusFilter]);
 
@@ -148,6 +149,18 @@ function SuperAdmin() {
     else if (action === "verify") void override(id, "approved", "Verified", note);
     else if (action === "send_back") void override(id, "pending", "Sent back to Admin", note);
   }, [override]);
+
+  const resolveIssue = useCallback(async (item: RequestItem) => {
+    if (!item.dbId) return;
+    if (!window.confirm(`Mark ${item.id} delivery issue as resolved and ask the employee to confirm again?`)) return;
+    try {
+      setActionError("");
+      await request(`/api/workflow/requests/${item.dbId}/resolve-delivery`, { method: "POST",
+        body: { remarks: "Delivery issue resolved. Employee asked to confirm receipt again." } });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Delivery issue could not be resolved");
+    } finally { await refresh(); }
+  }, [refresh]);
 
   const tabs: { id: Tab; label: string; icon: typeof Gauge }[] = [
     { id: "overview", label: "Overview", icon: Gauge },
@@ -236,6 +249,7 @@ function SuperAdmin() {
             companyFilter={companyFilter} setCompanyFilter={setCompanyFilter}
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
             onSelect={setSelectedId} onAction={onDetailAction}
+            onResolveIssue={(item) => void resolveIssue(item)}
           />
         )}
         {!initialLoading && tab === "anomalies" && <AnomaliesTab requests={searchedRequests} />}

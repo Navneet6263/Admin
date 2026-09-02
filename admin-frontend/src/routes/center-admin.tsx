@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Activity, Building2, ClipboardCheck, LayoutDashboard, Package, PackageCheck, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, Building2, ClipboardCheck, LayoutDashboard, Package, PackageCheck, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { CenterInventoryTable } from '@/components/center-admin/CenterInventoryTable';
@@ -15,9 +15,9 @@ import { CenterCombobox } from '@/components/CenterCombobox';
 import { PanelLoadingSkeleton } from '@/components/LoadingSkeletons';
 
 type Tab = 'overview' | 'approvals' | 'activity' | 'inventory';
-type QueueFilter = 'awaiting_approval' | 'ready_to_assign' | 'approved' | 'rejected' | 'withdrawn' | 'all';
+type QueueFilter = 'awaiting_approval' | 'ready_to_assign' | 'delivery_issues' | 'approved' | 'rejected' | 'withdrawn' | 'all';
 type CenterOption = { id: number; code: string; name: string; city: string };
-type QueueSummary = { ready_to_assign?: number };
+type QueueSummary = { ready_to_assign?: number; delivery_issues?: number };
 
 export const Route = createFileRoute('/center-admin')({
   head: () => ({ meta: [{ title: 'Center Admin · RequestHub' },
@@ -43,6 +43,7 @@ function CenterAdminDashboard() {
   const [centers, setCenters] = useState<CenterOption[]>([]);
   const [selectedCenter, setSelectedCenter] = useState('');
   const [readyCount, setReadyCount] = useState(0);
+  const [deliveryIssueCount, setDeliveryIssueCount] = useState(0);
   const pageSize = 20;
   const scope = selectedCenter ? `center_code=${encodeURIComponent(selectedCenter)}` : '';
 
@@ -52,6 +53,7 @@ function CenterAdminDashboard() {
       const result = await request<Paged<CenterRequest, QueueSummary>>(`/api/workflow/queue?status=${status}&page=${page}&page_size=${pageSize}${scope ? `&${scope}` : ''}`);
       setRequests(result.data); setTotal(result.total);
       setReadyCount(Number(result.summary?.ready_to_assign || 0));
+      setDeliveryIssueCount(Number(result.summary?.delivery_issues || 0));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Queue could not be loaded');
     } finally { setQueueLoading(false); }
@@ -94,6 +96,17 @@ function CenterAdminDashboard() {
       setError(message);
     }
   };
+  const resolveIssue = async (id: number) => {
+    if (!window.confirm('Mark this delivery issue as resolved and ask the employee to confirm again?')) return;
+    setError('');
+    try {
+      await request(`/api/workflow/requests/${id}/resolve-delivery`, { method: 'POST',
+        body: { remarks: 'Delivery issue resolved. Employee asked to confirm receipt again.' } });
+      if (page === 1) await refresh(); else setPage(1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Delivery issue could not be resolved');
+    }
+  };
   const visible = useMemo(() => {
     const value = query.trim().toLowerCase();
     return requests.filter((row) => !value || `${row.ref_id} ${row.subject} ${row.employeeName}`.toLowerCase().includes(value));
@@ -122,6 +135,10 @@ function CenterAdminDashboard() {
             className="inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-left text-cyan-800 shadow-sm">
             <PackageCheck className="h-4 w-4" /><span><b className="block text-xs">Ready to Assign · {readyCount}</b><span className="text-[10px]">Applicable inventory already deducted</span></span>
           </button>
+          <button type="button" onClick={() => { setTab('approvals'); setFilter('delivery_issues'); setPage(1); }}
+            className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-left text-rose-800 shadow-sm">
+            <AlertTriangle className="h-4 w-4" /><span><b className="block text-xs">Delivery Issues - {deliveryIssueCount}</b><span className="text-[10px]">Resolve and ask employee to confirm</span></span>
+          </button>
           {centers.length > 1 && <CenterCombobox centers={centers} value={selectedCenter}
             onChange={(value) => { setSelectedCenter(value); setInventory([]); setPage(1); }}
             placeholder="Select accessible center" className="w-64" />}
@@ -133,9 +150,9 @@ function CenterAdminDashboard() {
         {loading && !overview ? <PanelLoadingSkeleton /> : <>
           {tab === 'overview' && overview && <CenterOverview data={overview} activity={activity} />}
           {tab === 'approvals' && <section>
-            <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['ready_to_assign','Ready to assign'],['approved','Approved'],['rejected','Rejected'],['withdrawn','Withdrawn'],['all','All history']] as const).map(([value,label]) =>
+            <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['ready_to_assign','Ready to assign'],['delivery_issues','Delivery issues'],['approved','Approved'],['rejected','Rejected'],['withdrawn','Withdrawn'],['all','All history']] as const).map(([value,label]) =>
               <button key={value} type="button" onClick={() => { setFilter(value); setPage(1); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>{label}</button>)}</div>
-            {queueLoading ? <PanelLoadingSkeleton /> : <><div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} onAssign={(id) => act(id,'assign')} />)}</div>
+            {queueLoading ? <PanelLoadingSkeleton /> : <><div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} onAssign={(id) => act(id,'assign')} onResolve={resolveIssue} />)}</div>
             {!visible.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-20 text-center text-sm text-slate-400">No requests match this view.</div>}
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-200"><PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} /></div></>}
           </section>}

@@ -1,4 +1,4 @@
-import { ShieldCheck, Crown, CheckCircle2, Ban, RotateCcw } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Crown, CheckCircle2, Ban, RotateCcw } from "lucide-react";
 import { RequestRow } from "@/components/RequestRow";
 import { RequestDetail } from "@/components/RequestDetail";
 import { useCompanies } from "@/lib/directory";
@@ -11,15 +11,16 @@ interface Props {
   selected: RequestItem | undefined;
   companyFilter: string;
   setCompanyFilter: (v: string) => void;
-  statusFilter: RequestStatus | "all";
-  setStatusFilter: (v: RequestStatus | "all") => void;
+  statusFilter: RequestStatus | "delivery_issues" | "all";
+  setStatusFilter: (v: RequestStatus | "delivery_issues" | "all") => void;
   onSelect: (id: string) => void;
   onAction: (id: string, action: "approve"|"reject"|"queue"|"info"|"verify"|"send_back", note: string) => void;
+  onResolveIssue: (request: RequestItem) => void;
 }
 
 export function OverrideTab({
   list, selected, companyFilter, setCompanyFilter,
-  statusFilter, setStatusFilter, onSelect, onAction,
+  statusFilter, setStatusFilter, onSelect, onAction, onResolveIssue,
 }: Props) {
   const companies = useCompanies();
   const [page, setPage] = useState(1);
@@ -50,11 +51,12 @@ export function OverrideTab({
               <option value="all">All companies</option>
               {companies.map(c => <option key={c.code} value={c.name}>{c.code} · {c.name}</option>)}
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as RequestStatus | "all")}
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as RequestStatus | "delivery_issues" | "all")}
               className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-300">
               <option value="all">Any status</option>
               <option value="pending">Pending</option>
               <option value="queued">Queued</option>
+              <option value="delivery_issues">Delivery issues</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
               <option value="info_requested">Info requested</option>
@@ -81,6 +83,16 @@ export function OverrideTab({
                 <Crown className="w-3.5 h-3.5 text-amber-600" />
                 <span><b>Super Admin override</b> — you can act on this request regardless of its current stage.</span>
               </div>
+              {selected.receiptStatus === "disputed" && <div className="border-b border-rose-100 bg-rose-50 px-4 py-3">
+                <div className="mb-2 flex items-start gap-2 text-[11px] text-rose-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Employee marked this item as not received. Resolve after the item is handed over again.</span>
+                </div>
+                <button onClick={() => onResolveIssue(selected)}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Mark issue resolved
+                </button>
+              </div>}
               <div className="flex-1 overflow-hidden">
                 <RequestDetail request={selected} onAction={onAction} />
               </div>

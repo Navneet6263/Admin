@@ -202,6 +202,7 @@ function describeAction(a: string) {
     case "assigned": return "handed the item over to the employee";
     case "receipt_confirmed": return "confirmed receiving the item";
     case "receipt_disputed": return "reported that the item was not received";
+    case "issue_resolved": return "resolved the delivery issue";
     default: return a;
   }
 }

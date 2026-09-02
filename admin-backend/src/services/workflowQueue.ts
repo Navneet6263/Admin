@@ -22,10 +22,10 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
       WITH visible AS (SELECT r.id,r.ref_id,r.user_id,r.company,r.team,r.type,r.subject,r.description,r.amount,r.priority,r.status,r.details,
         r.workflow_status,r.payment_status,r.home_center_code,r.request_center_code,r.approval_center_code,
         r.charge_center_code,r.inventory_center_code,r.fulfillment_status,r.fulfilled_at,r.fulfilled_by,
-        CASE WHEN @role IN('hq_admin','super_admin') THEN r.receipt_status ELSE 'not_required' END receipt_status,
-        CASE WHEN @role IN('hq_admin','super_admin') THEN r.receipt_feedback END receipt_feedback,
-        CASE WHEN @role IN('hq_admin','super_admin') THEN r.receipt_note END receipt_note,
-        CASE WHEN @role IN('hq_admin','super_admin') THEN r.receipt_confirmed_at END receipt_confirmed_at,
+        CASE WHEN @role IN('center_admin','hq_admin','super_admin') THEN r.receipt_status ELSE 'not_required' END receipt_status,
+        CASE WHEN @role IN('center_admin','hq_admin','super_admin') THEN r.receipt_feedback END receipt_feedback,
+        CASE WHEN @role IN('center_admin','hq_admin','super_admin') THEN r.receipt_note END receipt_note,
+        CASE WHEN @role IN('center_admin','hq_admin','super_admin') THEN r.receipt_confirmed_at END receipt_confirmed_at,
         r.created_at,r.updated_at,u.name employeeName,u.email,u.dept employeeDept,
         a.assignment_type,CASE
           WHEN @role='super_admin' AND r.workflow_status='awaiting_approval' THEN 1
@@ -44,14 +44,14 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
         SELECT *,COUNT(*) OVER() total_count FROM visible
         WHERE @status='all' OR status=@status OR workflow_status=@status
           OR (@status='ready_to_assign' AND fulfillment_status='ready_to_assign')
-          OR (@status='delivery_issues' AND @role IN('hq_admin','super_admin') AND receipt_status='disputed')
+          OR (@status='delivery_issues' AND @role IN('center_admin','hq_admin','super_admin') AND receipt_status='disputed')
           OR (@status='inbox' AND status IN('pending','info_requested'))),
       paged AS (
         SELECT * FROM filtered
         ORDER BY created_at DESC,id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY)
       SELECT p.*,ISNULL((SELECT al.created_at [at],actor.name actor,al.action,al.note
         FROM approvals al JOIN users actor ON actor.id=al.actor_id WHERE al.request_id=p.id
-          AND (@role IN('hq_admin','super_admin') OR al.action NOT IN('receipt_confirmed','receipt_disputed'))
+          AND (@role IN('center_admin','hq_admin','super_admin') OR al.action NOT IN('receipt_confirmed','receipt_disputed','issue_resolved'))
         ORDER BY al.created_at,al.id FOR JSON PATH),'[]') audit
       FROM paged p ORDER BY p.created_at DESC,p.id DESC;
 
@@ -60,7 +60,7 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
         ISNULL(SUM(CASE WHEN r.workflow_status='awaiting_verification' THEN 1 ELSE 0 END),0) verification,
         ISNULL(SUM(CASE WHEN r.status='approved' THEN 1 ELSE 0 END),0) approved,
         ISNULL(SUM(CASE WHEN r.fulfillment_status='ready_to_assign' THEN 1 ELSE 0 END),0) ready_to_assign,
-        ISNULL(SUM(CASE WHEN @role IN('hq_admin','super_admin') AND r.receipt_status='disputed' THEN 1 ELSE 0 END),0) delivery_issues,
+        ISNULL(SUM(CASE WHEN @role IN('center_admin','hq_admin','super_admin') AND r.receipt_status='disputed' THEN 1 ELSE 0 END),0) delivery_issues,
         ISNULL(SUM(CASE WHEN r.status='rejected' THEN 1 ELSE 0 END),0) rejected,
         ISNULL(SUM(CASE WHEN r.status='withdrawn' THEN 1 ELSE 0 END),0) withdrawn,COUNT(*) [all]
       FROM requests r WHERE (@selectedCenter IS NULL OR r.approval_center_code=@selectedCenter) AND

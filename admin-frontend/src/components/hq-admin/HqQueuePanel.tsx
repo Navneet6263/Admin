@@ -5,7 +5,7 @@ import {
 } from "@/components/hq-admin/AdminFilters";
 import type { RequestItem, RequestType, Priority } from "@/components/models";
 import { PaginationBar } from "@/components/PaginationBar";
-import { PackageCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, PackageCheck } from "lucide-react";
 
 interface Props {
   filtered: RequestItem[];
@@ -34,6 +34,7 @@ interface Props {
   onBatchQueue: () => void;
   onBatchApprove: () => void;
   onAssign: (request: RequestItem) => void;
+  onResolveIssue: (request: RequestItem) => void;
   onDetailAction: (id: string, action: "approve" | "reject" | "queue" | "info" | "verify" | "send_back", note: string) => void;
 }
 
@@ -43,7 +44,7 @@ export function HqQueuePanel({
   page, pageSize, total, onPageChange,
   onTypeFilter, onPriorityFilter, onCompanyFilter, onAgeFilter, onSortBy, onQuery,
   onToggleAll, onToggleCheck, onSelect, onClearChecked,
-  onBatchQueue, onBatchApprove, onAssign, onDetailAction,
+  onBatchQueue, onBatchApprove, onAssign, onResolveIssue, onDetailAction,
 }: Props) {
   const actionable = filtered.filter((request) => request.canAct);
   return (
@@ -114,6 +115,16 @@ export function HqQueuePanel({
             <PackageCheck className="h-4 w-4" /> Mark item as handed over
           </button>
           <p className="mt-1.5 text-center text-[10px] text-cyan-700">Applicable inventory was deducted at approval. Confirm after giving it to the employee.</p>
+        </div>}
+        {selected?.receiptStatus === 'disputed' && <div className="border-b border-rose-100 bg-rose-50 p-3">
+          <div className="mb-2 flex items-start gap-2 text-[11px] text-rose-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Employee marked this item as not received. Resolve after handing it over again.</span>
+          </div>
+          <button type="button" onClick={() => onResolveIssue(selected)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700">
+            <CheckCircle2 className="h-4 w-4" /> Mark issue resolved
+          </button>
         </div>}
         <div className="min-h-0 flex-1 overflow-hidden">
         {selected ? (

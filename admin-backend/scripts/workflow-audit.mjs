@@ -55,7 +55,8 @@ const checks = [
     OR NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='IX_requests_fulfillment_queue') THEN 1 ELSE 0 END failures`],
   ["handover audit action constraint", `SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM sys.check_constraints
     WHERE parent_object_id=OBJECT_ID('approvals') AND definition LIKE '%assigned%'
-      AND definition LIKE '%receipt_confirmed%' AND definition LIKE '%receipt_disputed%') THEN 1 ELSE 0 END failures`],
+      AND definition LIKE '%receipt_confirmed%' AND definition LIKE '%receipt_disputed%'
+      AND definition LIKE '%issue_resolved%') THEN 1 ELSE 0 END failures`],
   ["assigned handover identity", `SELECT COUNT(*) failures FROM requests
     WHERE fulfillment_status='assigned' AND (fulfilled_by IS NULL OR fulfilled_at IS NULL)`],
   ["receipt confirmation schema", `SELECT CASE WHEN COL_LENGTH('requests','receipt_status') IS NULL

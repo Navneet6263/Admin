@@ -3,7 +3,8 @@ import mssql from "mssql";
 const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID('approvals')
       AND name='CK_approvals_action_current' AND definition LIKE '%assigned%'
-      AND definition LIKE '%receipt_confirmed%' AND definition LIKE '%receipt_disputed%') BEGIN
+      AND definition LIKE '%receipt_confirmed%' AND definition LIKE '%receipt_disputed%'
+      AND definition LIKE '%issue_resolved%') BEGIN
     DECLARE @actionConstraint sysname;
     SELECT TOP 1 @actionConstraint=cc.name FROM sys.check_constraints cc
       WHERE cc.parent_object_id=OBJECT_ID('approvals')
@@ -12,7 +13,8 @@ const statements = [
     IF @actionConstraint IS NOT NULL EXEC('ALTER TABLE approvals DROP CONSTRAINT ['+@actionConstraint+']');
     ALTER TABLE approvals ADD CONSTRAINT CK_approvals_action_current CHECK(action IN
       ('raised','withdrawn','approved','rejected','queued','info_requested','verified','sent_back',
-       'commented','payment_updated','payment_verified','assigned','receipt_confirmed','receipt_disputed'));
+       'commented','payment_updated','payment_verified','assigned','receipt_confirmed','receipt_disputed',
+       'issue_resolved'));
   END`,
   `IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('requests') AND name='fulfillment_status')
     ALTER TABLE requests ADD fulfillment_status NVARCHAR(30) NOT NULL

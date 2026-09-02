@@ -169,6 +169,18 @@ function HqAdminConsole() {
     } finally { await refresh(); }
   }, [refresh]);
 
+  const resolveIssue = useCallback(async (item: RequestItem) => {
+    if (!item.dbId) return;
+    if (!window.confirm(`Mark ${item.id} delivery issue as resolved and ask the employee to confirm again?`)) return;
+    try {
+      setActionError("");
+      await request(`/api/workflow/requests/${item.dbId}/resolve-delivery`, { method: "POST",
+        body: { remarks: "Delivery issue resolved. Employee asked to confirm receipt again." } });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Delivery issue could not be resolved");
+    } finally { await refresh(); }
+  }, [refresh]);
+
   const kpis = [
     { label: "In your inbox", value: counts.inbox, tone: "amber" as const },
     { label: "Ready to Assign", value: counts.ready_to_assign, tone: "indigo" as const,
@@ -297,6 +309,7 @@ function HqAdminConsole() {
           onBatchQueue={() => void applyAction([...checked], "queue", `Batch-forwarded ${checked.size} requests to Super Admin`)}
           onBatchApprove={() => void applyAction([...checked], "approve", "")}
           onAssign={(item) => void assignItem(item)}
+          onResolveIssue={(item) => void resolveIssue(item)}
           onDetailAction={onDetailAction}
         /></>
       )}
