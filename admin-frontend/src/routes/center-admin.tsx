@@ -89,7 +89,8 @@ function CenterAdminDashboard() {
     if (action === 'assign' && !window.confirm('Confirm this item has been handed over to the employee?')) return;
     setError('');
     try {
-      await request(`/api/workflow/requests/${id}/${action}`, { method: 'POST', body: { remarks: '' } });
+      const remarks = action === 'assign' ? 'Item handed over to employee' : '';
+      await request(`/api/workflow/requests/${id}/${action}`, { method: 'POST', body: { remarks } });
       if (page === 1) await refresh(); else setPage(1);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : `Request could not be ${action}d`;

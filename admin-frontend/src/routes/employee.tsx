@@ -66,9 +66,16 @@ function EmployeeConsole() {
     catch (error) { console.error("Unable to load delivery confirmations", error); }
   }, []);
   useEffect(() => {
+    const reloadWhenVisible = () => { if (!document.hidden) void loadReceipts(); };
     void loadReceipts();
-    const timer = window.setInterval(() => void loadReceipts(), 20_000);
-    return () => window.clearInterval(timer);
+    window.addEventListener("focus", reloadWhenVisible);
+    document.addEventListener("visibilitychange", reloadWhenVisible);
+    const timer = window.setInterval(() => void loadReceipts(), 5_000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", reloadWhenVisible);
+      document.removeEventListener("visibilitychange", reloadWhenVisible);
+    };
   }, [loadReceipts]);
 
   const [successToast, setSuccessToast] = useState<string | null>(null);

@@ -7,6 +7,7 @@ export async function markAssigned(requestId: number, actor: AuthUser, note = ""
   const tx = pool.transaction();
   await tx.begin();
   let row: any;
+  const assignedAt = new Date();
   try {
     const result = await tx.request().input("id", mssql.Int, requestId)
       .query(`SELECT user_id,ref_id,type,approval_center_code FROM requests WITH(UPDLOCK,ROWLOCK)
@@ -24,9 +25,10 @@ export async function markAssigned(requestId: number, actor: AuthUser, note = ""
       .input("id", mssql.Int, requestId)
       .input("actor", mssql.Int, actor.id)
       .input("note", mssql.NVarChar(1000), note || "Item handed over to employee")
+      .input("assignedAt", mssql.DateTime2, assignedAt)
       .query(`UPDATE requests SET fulfillment_status='assigned',receipt_status='awaiting_confirmation',
           receipt_feedback=NULL,receipt_note=NULL,receipt_confirmed_at=NULL,fulfilled_by=@actor,
-          fulfilled_at=SYSUTCDATETIME(),updated_at=GETDATE() WHERE id=@id;
+          fulfilled_at=@assignedAt,updated_at=GETDATE() WHERE id=@id;
         INSERT INTO approvals(request_id,actor_id,action,note) VALUES(@id,@actor,'assigned',@note)`);
     await tx.commit();
   } catch (error) {
@@ -36,11 +38,11 @@ export async function markAssigned(requestId: number, actor: AuthUser, note = ""
   try {
     await notify({ userId: row.user_id,
       message: `${row.ref_id} was handed over by ${actor.name}.`, kind: "request_status",
-      actionUrl: "/employee", dedupeKey: `assigned:${requestId}` });
+      actionUrl: "/employee", dedupeKey: `assigned:${requestId}:${assignedAt.getTime()}` });
   } catch (error) {
     console.error(`Handover ${requestId} saved but notification failed:`, error);
   }
-  return { fulfillment_status: "assigned", fulfilled_by: actor.id };
+  return { fulfillment_status: "assigned", receipt_status: "awaiting_confirmation", fulfilled_by: actor.id };
 }
 
 export async function resolveDeliveryIssue(requestId: number, actor: AuthUser, note = "") {
