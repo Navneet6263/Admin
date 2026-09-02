@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Check, Crop, X } from "lucide-react";
 
-const VIEW_W = 300;
-const VIEW_H = 350;
+const VIEW_W = 264;
+const VIEW_H = 308;
 const OUTPUT_W = 480;
 const OUTPUT_H = 560;
 
@@ -42,9 +42,9 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
       size.width * scaleX, size.height * scaleY);
     onApply(canvas.toDataURL("image/jpeg", .88));
   };
-  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/80 p-4 backdrop-blur-md">
-    <div className="w-full max-w-md rounded-2xl border border-white/15 bg-slate-950 p-5 shadow-2xl">
-      <div className="mb-4 flex items-start justify-between"><div><p className="flex items-center gap-2 text-sm font-bold text-white"><Crop className="h-4 w-4" /> Crop employee photo</p>
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/80 p-2 backdrop-blur-md sm:p-4">
+    <div className="request-scrollbar max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-slate-950 p-4 shadow-2xl sm:p-5">
+      <div className="mb-3 flex items-start justify-between"><div><p className="flex items-center gap-2 text-sm font-bold text-white"><Crop className="h-4 w-4" /> Crop employee photo</p>
         <p className="mt-1 text-xs text-slate-400">The full photo is fitted automatically. Zoom only if needed, then drag to reposition.</p></div>
         <button type="button" onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></button></div>
       <div className="mx-auto overflow-hidden rounded-xl border-2 border-white bg-slate-800 shadow-xl touch-none" style={{ width: VIEW_W, height: VIEW_H }}
@@ -57,14 +57,14 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
             const nextBase = Math.min(VIEW_W / next.width, VIEW_H / next.height); setNatural(next); setZoom(1);
             setOffset({ left: (VIEW_W - next.width * nextBase) / 2, top: (VIEW_H - next.height * nextBase) / 2 }); }} />
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <button type="button" onClick={() => positionAt(1)} className="rounded-lg border border-white/15 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-white/10">Full photo</button>
         <button type="button" onClick={() => positionAt(fillZoom)} className="rounded-lg border border-indigo-400/40 bg-indigo-500/15 px-2 py-2 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-500/25">Crop to fill</button>
         <button type="button" onClick={() => positionAt(zoom, true)} className="rounded-lg border border-white/15 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-white/10">Keep head visible</button>
       </div>
-      <label className="mt-4 block text-[10px] font-bold uppercase tracking-widest text-slate-400">Fine zoom</label>
+      <label className="mt-3 block text-[10px] font-bold uppercase tracking-widest text-slate-400">Fine zoom</label>
       <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => changeZoom(Number(event.target.value))} className="mt-2 w-full accent-indigo-500" />
-      <div className="mt-4 flex gap-2"><button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-white/15 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10">Cancel</button>
+      <div className="sticky bottom-0 -mx-4 -mb-4 mt-3 flex gap-2 border-t border-white/10 bg-slate-950/95 p-4 backdrop-blur sm:-mx-5 sm:-mb-5 sm:p-5"><button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-white/15 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10">Cancel</button>
         <button type="button" onClick={apply} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"><Check className="h-4 w-4" /> Use this crop</button></div>
     </div>
   </div>;
