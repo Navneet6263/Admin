@@ -168,8 +168,8 @@ export function IdCardForm({ value, onChange, profile }: { value: IdCardState; o
 
       <div className="rounded-xl border border-white/15 bg-white/5 p-3">
         <div className="flex items-center gap-3">
-          <div className="h-16 w-14 overflow-hidden rounded-lg border border-white/20 bg-slate-800">
-            {value.photoDataUrl ? <img src={value.photoDataUrl} alt="ID preview" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[9px] text-slate-400">PHOTO</span>}
+          <div className="h-16 w-14 overflow-hidden rounded-lg border border-white/20 bg-slate-100">
+            {value.photoDataUrl ? <img src={value.photoDataUrl} alt="ID preview" className="h-full w-full object-contain" /> : <span className="grid h-full place-items-center text-[9px] text-slate-400">PHOTO</span>}
           </div>
           <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-white">Employee photograph *</p><p className="mt-0.5 text-[10px] text-slate-400">Upload a clear front-facing passport photo.</p></div>
           <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-semibold text-white hover:bg-white/15">
