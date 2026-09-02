@@ -29,11 +29,7 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
         r.created_at,r.updated_at,u.name employeeName,u.email,u.dept employeeDept,
         a.assignment_type,CASE
           WHEN @role='super_admin' AND r.workflow_status='awaiting_approval' THEN 1
-          WHEN a.role=@role THEN a.can_act ELSE 0 END can_act,
-        ISNULL((SELECT al.created_at [at],actor.name actor,al.action,al.note
-          FROM approvals al JOIN users actor ON actor.id=al.actor_id WHERE al.request_id=r.id
-            AND (@role IN('hq_admin','super_admin') OR al.action NOT IN('receipt_confirmed','receipt_disputed'))
-          ORDER BY al.created_at,al.id FOR JSON PATH),'[]') audit
+          WHEN a.role=@role THEN a.can_act ELSE 0 END can_act
         FROM requests r JOIN users u ON u.id=r.user_id
         OUTER APPLY (SELECT TOP 1 ra.id,ra.role,ra.assignment_type,ra.can_act FROM request_assignments ra
           WHERE ra.request_id=r.id AND ra.is_active=1 AND ra.role=@role
@@ -43,13 +39,21 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
           ORDER BY CASE WHEN ra.role=@role THEN 0 ELSE 1 END,
             ra.can_act DESC,ra.id DESC) a
         WHERE (@selectedCenter IS NULL OR r.approval_center_code=@selectedCenter) AND
-        (@role IN('super_admin','hq_admin') OR a.id IS NOT NULL))
-      SELECT *,COUNT(*) OVER() total_count FROM visible
-      WHERE @status='all' OR status=@status OR workflow_status=@status
-        OR (@status='ready_to_assign' AND fulfillment_status='ready_to_assign')
-        OR (@status='delivery_issues' AND @role IN('hq_admin','super_admin') AND receipt_status='disputed')
-        OR (@status='inbox' AND status IN('pending','info_requested'))
-      ORDER BY created_at DESC,id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+        (@role IN('super_admin','hq_admin') OR a.id IS NOT NULL)),
+      filtered AS (
+        SELECT *,COUNT(*) OVER() total_count FROM visible
+        WHERE @status='all' OR status=@status OR workflow_status=@status
+          OR (@status='ready_to_assign' AND fulfillment_status='ready_to_assign')
+          OR (@status='delivery_issues' AND @role IN('hq_admin','super_admin') AND receipt_status='disputed')
+          OR (@status='inbox' AND status IN('pending','info_requested'))),
+      paged AS (
+        SELECT * FROM filtered
+        ORDER BY created_at DESC,id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY)
+      SELECT p.*,ISNULL((SELECT al.created_at [at],actor.name actor,al.action,al.note
+        FROM approvals al JOIN users actor ON actor.id=al.actor_id WHERE al.request_id=p.id
+          AND (@role IN('hq_admin','super_admin') OR al.action NOT IN('receipt_confirmed','receipt_disputed'))
+        ORDER BY al.created_at,al.id FOR JSON PATH),'[]') audit
+      FROM paged p ORDER BY p.created_at DESC,p.id DESC;
 
       SELECT ISNULL(SUM(CASE WHEN r.status IN('pending','info_requested') THEN 1 ELSE 0 END),0) inbox,
         ISNULL(SUM(CASE WHEN r.status='queued' THEN 1 ELSE 0 END),0) queued,

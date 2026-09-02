@@ -132,6 +132,8 @@ const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_notifications_user_feed')
     CREATE INDEX IX_notifications_user_feed ON notifications(user_id,created_at DESC,id DESC)
       INCLUDE(is_read,kind,due_at)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_notifications_user_read')
+    CREATE INDEX IX_notifications_user_read ON notifications(user_id,is_read)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_global_feed')
     CREATE INDEX IX_requests_global_feed ON requests(updated_at DESC,id DESC)
       INCLUDE(company,status,approval_center_code,user_id,type,amount,priority)`,

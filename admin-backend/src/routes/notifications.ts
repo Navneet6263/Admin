@@ -12,15 +12,17 @@ router.get("/", async (req, res) => {
       .input("uid", mssql.Int, req.user!.id)
       .input("offset", mssql.Int, (page - 1) * size)
       .input("size", mssql.Int, size)
-      .query(`SELECT id,message,kind,action_url,due_at,is_read,created_at,COUNT(*) OVER() total
+      .query(`SELECT id,message,kind,action_url,due_at,is_read,created_at
         FROM notifications WHERE user_id=@uid ORDER BY created_at DESC,id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY;
+        SELECT COUNT_BIG(*) total FROM notifications WHERE user_id=@uid;
         SELECT COUNT_BIG(*) unread FROM notifications WHERE user_id=@uid AND is_read=0;`);
+    const sets = result.recordsets as unknown as Array<Array<{ total?: number; unread?: number }>>;
     res.json({
       data: result.recordset,
       page,
       page_size: size,
-      total: Number(result.recordset[0]?.total || 0),
-      unread: Number((result.recordsets as unknown as Array<Array<{ unread: number }>>)[1]?.[0]?.unread || 0),
+      total: Number(sets[1]?.[0]?.total || 0),
+      unread: Number(sets[2]?.[0]?.unread || 0),
     });
   } catch (error) {
     console.error(error);
