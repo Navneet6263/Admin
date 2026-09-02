@@ -3,7 +3,7 @@ import { CenterCombobox } from "@/components/CenterCombobox";
 import { useEffect, useMemo, useState } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
-import { session } from "@/lib/api";
+import { request, session } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
