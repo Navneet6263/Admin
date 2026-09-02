@@ -36,9 +36,9 @@ export const Route = createFileRoute("/super-admin")({
 
 function SuperAdmin() {
   const sessionUser = useSessionUser();
-  const inventory = useInventory();
   const [authenticated, setAuthenticated] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
+  const inventory = useInventory(tab === "inventory");
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -52,6 +52,10 @@ function SuperAdmin() {
   const [centerSearch, setCenterSearch] = useState("");
   const [scopeCenter, setScopeCenter] = useState("");
 
+  const loadCenters = useCallback(async () => {
+    try { setCenters(await request<CenterRow[]>('/api/centers')); }
+    catch (error) { console.error(error); }
+  }, []);
   const loadCentersData = useCallback(async () => {
     try {
       const [users, ctrs] = await Promise.all([
@@ -72,7 +76,7 @@ function SuperAdmin() {
 
   useEffect(() => { if (sessionUser) setAuthenticated(true); }, [sessionUser]);
   useEffect(() => { if (authenticated) void refresh(); }, [authenticated, refresh]);
-  useEffect(() => { if (authenticated) void loadCentersData(); }, [authenticated, loadCentersData]);
+  useEffect(() => { if (authenticated) void loadCenters(); }, [authenticated, loadCenters]);
 
   const searchedRequests = useMemo(() => { const query = centerSearch.trim().toLowerCase(); if (!query) return requests;
     return requests.filter((item) => [item.id, item.subject, item.description, item.employeeName, item.employeeDept,

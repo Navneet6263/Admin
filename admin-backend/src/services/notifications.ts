@@ -54,23 +54,15 @@ export async function notifyRole(
 }
 
 export async function createPaymentReminders() {
-  const due = await withDbRetry(() => pool.request()
-    .query(`SELECT p.id,p.request_id,r.ref_id,r.approval_center_code
-    FROM payments p JOIN requests r ON r.id=p.request_id
-    WHERE p.status='awaiting_update' AND p.due_at<=SYSUTCDATETIME()`));
-  for (const row of due.recordset) {
-    const admins = await withDbRetry(() => pool.request()
-      .query(`SELECT id FROM users WHERE is_active=1 AND role IN('finance','finance_head')`));
-    await Promise.all(
-      admins.recordset.map((u) =>
-        notify({
-          userId: u.id,
-          kind: "payment_reminder",
-      actionUrl: `/finance?request=${row.request_id}`,
-          message: `Payment details for ${row.ref_id} are overdue. Please update the final amount.`,
-          dedupeKey: `payment:${row.id}:${u.id}`,
-        }),
-      ),
-    );
-  }
+  await withDbRetry(() => pool.request().query(`
+    INSERT INTO notifications(user_id,message,kind,action_url,dedupe_key)
+    SELECT u.id,CONCAT('Payment details for ',r.ref_id,' are overdue. Please update the final amount.'),
+      'payment_reminder',CONCAT('/finance?request=',p.request_id),CONCAT('payment:',p.id,':',u.id)
+    FROM payments p
+    JOIN requests r ON r.id=p.request_id
+    CROSS JOIN users u
+    WHERE p.status='awaiting_update' AND p.due_at<=SYSUTCDATETIME()
+      AND u.is_active=1 AND u.role IN('finance','finance_head')
+      AND NOT EXISTS(SELECT 1 FROM notifications n WHERE n.dedupe_key=CONCAT('payment:',p.id,':',u.id));
+  `));
 }

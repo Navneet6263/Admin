@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
@@ -148,6 +148,18 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
   );
 }
 
+function DarkPager({ page, pages, total, onPage }: { page: number; pages: number; total: number; onPage: (page: number) => void }) {
+  if (pages <= 1) return null;
+  const button = { border: "1px solid rgba(255,255,255,.12)", borderRadius: 9, padding: "7px 12px", color: "#cbd5e1", background: "rgba(255,255,255,.05)" };
+  return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 18, color: "#64748b", fontSize: 12 }}>
+    <span>{total} centers · Page {page} of {pages}</span>
+    <div style={{ display: "flex", gap: 8 }}>
+      <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} style={{ ...button, opacity: page <= 1 ? .35 : 1 }}>Previous</button>
+      <button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)} style={{ ...button, opacity: page >= pages ? .35 : 1 }}>Next</button>
+    </div>
+  </div>;
+}
+
 function CommandCenter() {
   const sessionUser = useSessionUser();
   const [centers, setCenters]   = useState<CenterHealth[]>([]);
@@ -156,9 +168,13 @@ function CommandCenter() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [panel, setPanel]       = useState<"health" | "burn" | "peers">("health");
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [page, setPage]         = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const pageSize = 12;
 
   const fetchAll = useCallback(async () => {
+    setError("");
     try {
       const [h, b, p, a] = await Promise.all([
         request<CenterHealth[]>("/api/dashboard/command-center"),
@@ -168,7 +184,7 @@ function CommandCenter() {
       ]);
       setCenters(h); setBurnData(b); setPeers(p); setActivity(a);
       setLastUpdated(new Date());
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); setError(e instanceof Error ? e.message : "Command Center data could not be loaded"); }
     finally { setLoading(false); }
   }, []);
 
@@ -178,12 +194,20 @@ function CommandCenter() {
 
   const redCount   = centers.filter(c => c.health === "red").length;
   const amberCount = centers.filter(c => c.health === "amber").length;
+  const activeRows = panel === "health" ? centers : panel === "burn" ? burnData : peers;
+  const pages = Math.max(1, Math.ceil(activeRows.length / pageSize));
+  const offset = (page - 1) * pageSize;
+  const visibleCenters = useMemo(() => centers.slice(offset, offset + pageSize), [centers, offset]);
+  const visibleBurn = useMemo(() => burnData.slice(offset, offset + pageSize), [burnData, offset]);
+  const visiblePeers = useMemo(() => peers.slice(offset, offset + pageSize), [peers, offset]);
+  useEffect(() => setPage(1), [panel]);
+  useEffect(() => setPage((current) => Math.min(current, pages)), [pages]);
 
   return (
     <DashboardLayout workspace="Command Center" currentUser={sessionUser?.name ?? ""} role={sessionUser?.dept || "Executive Oversight"}>
       <div style={{ minHeight: "100vh", background: "#070c19", fontFamily: "'Inter', sans-serif", padding: "32px 28px" }}>
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 36 }}>
+        <div className="mb-9 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <Activity size={18} color="#6366f1" />
@@ -194,7 +218,7 @@ function CommandCenter() {
               Last updated: {lastUpdated.toLocaleTimeString("en-IN")}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
             {redCount > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", padding: "8px 16px", borderRadius: 20 }}>
                 <AlertTriangle size={14} color="#ef4444" />
@@ -213,7 +237,8 @@ function CommandCenter() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 28, alignItems: "start" }}>
+        {error && <div style={{ marginBottom: 20, border: "1px solid rgba(239,68,68,.3)", borderRadius: 12, background: "rgba(239,68,68,.1)", color: "#fca5a5", padding: "12px 16px", fontSize: 13 }}>{error}</div>}
+        <div className="grid items-start gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
           {/* Main Panel */}
           <div>
             {/* Sub-tabs */}
@@ -234,17 +259,21 @@ function CommandCenter() {
               ))}
             </div>
 
+            {loading && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 18 }}>
+              {Array.from({ length: 6 }, (_, index) => <div key={index} className="animate-pulse" style={{ height: 210, borderRadius: 18, border: "1px solid rgba(255,255,255,.07)", background: "rgba(255,255,255,.04)" }} />)}
+            </div>}
+
             {/* Health Panel */}
             {panel === "health" && !loading && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-                {centers.map(c => <CenterHealthCard key={c.code} c={c} />)}
+                {visibleCenters.map(c => <CenterHealthCard key={c.code} c={c} />)}
               </div>
             )}
 
             {/* Burn Rate Panel */}
             {panel === "burn" && !loading && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {burnData.map(b => (
+                {visibleBurn.map(b => (
                   <div key={b.center_code} style={{
                     background: b.overrun ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.04)",
                     border: `1px solid ${b.overrun ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.08)"}`,
@@ -277,7 +306,7 @@ function CommandCenter() {
 
             {/* Peer Comparison Panel */}
             {panel === "peers" && !loading && (
-              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, overflow: "hidden" }}>
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -287,11 +316,11 @@ function CommandCenter() {
                     </tr>
                   </thead>
                   <tbody>
-                    {peers.map((p, i) => (
+                    {visiblePeers.map((p, i) => (
                       <tr key={p.code} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
                         <td style={{ padding: "14px 18px" }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: i === 0 ? "#fbbf24" : "#64748b" }}>#{i + 1}</span>
-                          {i === 0 && <span style={{ marginLeft: 6, fontSize: 13 }}>⭐</span>}
+                          <span style={{ fontSize: 13, fontWeight: 800, color: offset + i === 0 ? "#fbbf24" : "#64748b" }}>#{offset + i + 1}</span>
+                          {offset + i === 0 && <span style={{ marginLeft: 6, fontSize: 13 }}>⭐</span>}
                         </td>
                         <td style={{ padding: "14px 18px" }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{p.name}</div>
@@ -312,6 +341,7 @@ function CommandCenter() {
                 </table>
               </div>
             )}
+            {!loading && <DarkPager page={page} pages={pages} total={activeRows.length} onPage={setPage} />}
           </div>
 
           {/* Activity Feed Sidebar */}

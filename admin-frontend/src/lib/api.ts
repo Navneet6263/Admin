@@ -14,6 +14,9 @@ export type SessionUser = {
 };
 
 const userKey = 'requesthub.user';
+let verifiedUser: SessionUser | null = null;
+let verifiedAt = 0;
+let meInFlight: Promise<SessionUser | null> | null = null;
 
 export const session = {
   get token() { return typeof window === 'undefined' ? null : localStorage.getItem(tokenKey); },
@@ -25,17 +28,23 @@ export const session = {
   clear: () => {
     localStorage.removeItem(tokenKey);
     localStorage.removeItem(userKey);
+    verifiedUser = null;
+    verifiedAt = 0;
   },
   async login(email: string, password: string) {
     const data = await request<{ user: SessionUser }>('/api/auth/login', { method: 'POST', body: { email, password } }, false);
     localStorage.removeItem(tokenKey);
     localStorage.setItem(userKey, JSON.stringify(data.user));
+    verifiedUser = data.user;
+    verifiedAt = Date.now();
     return data.user;
   },
   async register(details: { name: string; email: string; password: string; company?: string; dept?: string; center_code?: string }) {
     const data = await request<{ user: SessionUser }>('/api/auth/register', { method: 'POST', body: details }, false);
     localStorage.removeItem(tokenKey);
     localStorage.setItem(userKey, JSON.stringify(data.user));
+    verifiedUser = data.user;
+    verifiedAt = Date.now();
     return data.user;
   },
   async logout() {
@@ -43,14 +52,16 @@ export const session = {
     finally { this.clear(); }
   },
   async me() {
-    try {
-      const u = await request<SessionUser>('/api/auth/me');
-      localStorage.setItem(userKey, JSON.stringify(u));
-      return u;
-    } catch {
-      this.clear();
-      return null;
-    }
+    if (verifiedUser && Date.now() - verifiedAt < 15_000) return verifiedUser;
+    if (!meInFlight) meInFlight = request<SessionUser>('/api/auth/me')
+      .then((user) => {
+        verifiedUser = user; verifiedAt = Date.now();
+        localStorage.setItem(userKey, JSON.stringify(user));
+        return user;
+      })
+      .catch(() => { this.clear(); return null; })
+      .finally(() => { meInFlight = null; });
+    return meInFlight;
   }
 };
 

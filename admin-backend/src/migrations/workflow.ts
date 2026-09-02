@@ -129,6 +129,21 @@ const statements = [
     CREATE INDEX IX_center_inventory_stock ON center_inventory(center_code,sku) INCLUDE(qty,reserved_qty)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_notifications_dedupe')
     CREATE UNIQUE INDEX UX_notifications_dedupe ON notifications(dedupe_key) WHERE dedupe_key IS NOT NULL`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_notifications_user_feed')
+    CREATE INDEX IX_notifications_user_feed ON notifications(user_id,created_at DESC,id DESC)
+      INCLUDE(is_read,kind,due_at)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_global_feed')
+    CREATE INDEX IX_requests_global_feed ON requests(updated_at DESC,id DESC)
+      INCLUDE(company,status,approval_center_code,user_id,type,amount,priority)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_company_status_feed')
+    CREATE INDEX IX_requests_company_status_feed ON requests(company,status,updated_at DESC,id DESC)
+      INCLUDE(approval_center_code,user_id,type,amount,priority)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_home_center_dashboard')
+    CREATE INDEX IX_requests_home_center_dashboard ON requests(home_center_code)
+      INCLUDE(status,created_at,updated_at,amount)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_stock_movements_feed')
+    CREATE INDEX IX_stock_movements_feed ON stock_movements(created_at DESC,id DESC)
+      INCLUDE(sku,direction,qty,balance_after,source,ref_id)`,
   `IF NOT EXISTS(SELECT 1 FROM approval_policies WHERE role='center_admin')
       INSERT INTO approval_policies(role,max_amount,can_view,can_approve,can_update_payment,can_verify_payment,can_view_analytics)
       VALUES('center_admin',50000,1,1,1,0,0);

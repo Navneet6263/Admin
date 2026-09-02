@@ -35,6 +35,8 @@ function CenterAdminDashboard() {
   const [requests, setRequests] = useState<CenterRequest[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -45,23 +47,29 @@ function CenterAdminDashboard() {
   const scope = selectedCenter ? `center_code=${encodeURIComponent(selectedCenter)}` : '';
 
   const loadQueue = useCallback(async (status: QueueFilter) => {
-    const result = await request<Paged<CenterRequest, QueueSummary>>(`/api/workflow/queue?status=${status}&page=${page}&page_size=${pageSize}${scope ? `&${scope}` : ''}`);
-    setRequests(result.data); setTotal(result.total);
-    setReadyCount(Number(result.summary?.ready_to_assign || 0));
+    setQueueLoading(true);
+    try {
+      const result = await request<Paged<CenterRequest, QueueSummary>>(`/api/workflow/queue?status=${status}&page=${page}&page_size=${pageSize}${scope ? `&${scope}` : ''}`);
+      setRequests(result.data); setTotal(result.total);
+      setReadyCount(Number(result.summary?.ready_to_assign || 0));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Queue could not be loaded');
+    } finally { setQueueLoading(false); }
   }, [page, scope]);
-  const refresh = useCallback(async () => {
+  const loadOverview = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const [summary, logs] = await Promise.all([
         request<CenterOverviewData>(`/api/center-admin/overview${scope ? `?${scope}` : ''}`),
         request<CenterActivityRow[]>(`/api/center-admin/activity?limit=40${scope ? `&${scope}` : ''}`),
-        loadQueue(filter),
       ]);
       setOverview(summary); setActivity(logs);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Dashboard could not be loaded'); }
     finally { setLoading(false); }
-  }, [filter, loadQueue]);
-  useEffect(() => { void refresh(); }, [refresh]);
+  }, [scope]);
+  const refresh = useCallback(async () => { await Promise.all([loadOverview(), loadQueue(filter)]); }, [filter, loadOverview, loadQueue]);
+  useEffect(() => { void loadOverview(); }, [loadOverview]);
+  useEffect(() => { void loadQueue(filter); }, [filter, loadQueue]);
   useEffect(() => {
     void request<CenterOption[]>('/api/centers').then((rows) => {
       setCenters(rows);
@@ -70,8 +78,9 @@ function CenterAdminDashboard() {
   }, [user?.center_code]);
   useEffect(() => {
     if (tab !== 'inventory' || inventory.length) return;
+    setInventoryLoading(true);
     void request<CenterInventoryRow[]>(`/api/center-admin/inventory-view${scope ? `?${scope}` : ''}`).then(setInventory).catch((cause) =>
-      setError(cause instanceof Error ? cause.message : 'Inventory could not be loaded'));
+      setError(cause instanceof Error ? cause.message : 'Inventory could not be loaded')).finally(() => setInventoryLoading(false));
   }, [inventory.length, scope, tab]);
 
   const act = async (id: number, action: 'approve' | 'reject' | 'assign') => {
@@ -126,12 +135,12 @@ function CenterAdminDashboard() {
           {tab === 'approvals' && <section>
             <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['ready_to_assign','Ready to assign'],['approved','Approved'],['rejected','Rejected'],['withdrawn','Withdrawn'],['all','All history']] as const).map(([value,label]) =>
               <button key={value} type="button" onClick={() => { setFilter(value); setPage(1); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>{label}</button>)}</div>
-            <div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} onAssign={(id) => act(id,'assign')} />)}</div>
+            {queueLoading ? <PanelLoadingSkeleton /> : <><div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} onAssign={(id) => act(id,'assign')} />)}</div>
             {!visible.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-20 text-center text-sm text-slate-400">No requests match this view.</div>}
-            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200"><PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} /></div>
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200"><PaginationBar page={page} pageSize={pageSize} total={total} onPageChange={setPage} /></div></>}
           </section>}
           {tab === 'activity' && <ActivityFeed rows={activity} title="Center audit trail" subtitle="Every approval and workflow action for this center" />}
-          {tab === 'inventory' && <CenterInventoryTable rows={inventory} />}
+          {tab === 'inventory' && (inventoryLoading ? <PanelLoadingSkeleton /> : <CenterInventoryTable rows={inventory} />)}
         </>}
       </div>
     </div>

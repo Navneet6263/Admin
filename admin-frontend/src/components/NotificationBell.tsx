@@ -15,13 +15,18 @@ interface Notice {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notice[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [unread, setUnread] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextPage = 1, append = false) => {
     try {
       const r = await request<Paged<Notice> & { unread: number }>(
-        "/api/notifications?page_size=20",
+        `/api/notifications?page=${nextPage}&page_size=20`,
       );
-      setItems(r.data);
+      setItems((current) => append ? [...current, ...r.data.filter((row) => !current.some((item) => item.id === row.id))] : r.data);
+      setPage(nextPage); setTotal(r.total); setUnread(r.unread);
     } catch {
       /* session may be changing */
     }
@@ -42,14 +47,20 @@ export function NotificationBell() {
     if (!n.is_read) {
       await request(`/api/notifications/${n.id}/read`, { method: "PATCH" });
       setItems((x) => x.map((i) => (i.id === n.id ? { ...i, is_read: true } : i)));
+      setUnread((value) => Math.max(0, value - 1));
     }
     if (n.action_url) window.location.assign(n.action_url);
   };
   const all = async () => {
     await request("/api/notifications/read-all", { method: "POST" });
     setItems((x) => x.map((i) => ({ ...i, is_read: true })));
+    setUnread(0);
   };
-  const unread = items.filter((i) => !i.is_read).length;
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try { await load(page + 1, true); }
+    finally { setLoadingMore(false); }
+  };
   return (
     <div className="relative" ref={box}>
       <button
@@ -109,6 +120,10 @@ export function NotificationBell() {
             {!items.length && (
               <div className="p-10 text-center text-xs text-slate-400">You are all caught up.</div>
             )}
+            {items.length < total && <button type="button" disabled={loadingMore} onClick={() => void loadMore()}
+              className="w-full border-t border-slate-100 px-3 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50">
+              {loadingMore ? "Loading…" : `Load older notifications (${total - items.length} remaining)`}
+            </button>}
           </div>
         </div>
       )}

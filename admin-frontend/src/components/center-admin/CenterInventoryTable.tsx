@@ -1,13 +1,20 @@
 import { AlertTriangle, Boxes, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { TablePagination } from '@/components/TablePagination';
 import type { CenterInventoryRow } from './types';
 
 export function CenterInventoryTable({ rows }: { rows: CenterInventoryRow[] }) {
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
     return rows.filter((row) => !value || `${row.sku} ${row.name} ${row.category}`.toLowerCase().includes(value));
   }, [query, rows]);
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page, pageSize]);
+  useEffect(() => setPage(1), [pageSize, query]);
+  useEffect(() => setPage((current) => Math.min(current, pages)), [pages]);
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-200/40">
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
@@ -28,7 +35,7 @@ export function CenterInventoryTable({ rows }: { rows: CenterInventoryRow[] }) {
               <th key={title} className={`px-4 py-2.5 font-medium ${['On hand','Reserved','Available','Stock value'].includes(title) ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((row) => {
+            {visible.map((row) => {
               const low = Number(row.available_qty) <= Number(row.threshold);
               return <tr key={row.sku} className="hover:bg-slate-50/70">
                 <td className="px-4 py-3 font-mono text-[10px] text-slate-500">{row.sku}</td>
@@ -45,6 +52,7 @@ export function CenterInventoryTable({ rows }: { rows: CenterInventoryRow[] }) {
           </tbody>
         </table>
       </div>
+      <TablePagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={setPageSize} />
     </section>
   );
 }

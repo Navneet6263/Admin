@@ -41,8 +41,8 @@ interface Props {
 const priorities: Priority[] = ["low", "normal", "high", "urgent"];
 
 export function NewRequestDialog({ open, initialType, centers = [], homeCenter = "", employeeProfile, onClose, onSubmit }: Props) {
-  const inventory = useInventory();
   const [type, setType] = useState<RequestType>("id_card");
+  const inventory = useInventory(open && type === "stationery");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");

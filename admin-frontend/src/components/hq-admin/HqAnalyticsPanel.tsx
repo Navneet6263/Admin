@@ -5,6 +5,7 @@ import { buildHistory, fmtINR } from "@/components/super-admin/shared";
 import type { RequestItem } from "@/components/models";
 import { request } from "@/lib/api";
 import { TableLoadingSkeleton } from "@/components/LoadingSkeletons";
+import { TablePagination } from "@/components/TablePagination";
 
 interface CenterPerformance {
   code: string;
@@ -21,6 +22,8 @@ interface CenterPerformance {
 export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestItem[]; centerCode: string }) {
   const [centers, setCenters] = useState<CenterPerformance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   const history = useMemo(() => buildHistory(requests), [requests]);
 
   useEffect(() => {
@@ -41,6 +44,10 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
       return bRate - aRate || a.avg_response_hrs - b.avg_response_hrs;
     });
   }, [centerCode, centers]);
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const paged = useMemo(() => visible.slice((page - 1) * pageSize, page * pageSize), [page, pageSize, visible]);
+  useEffect(() => setPage(1), [centerCode, pageSize]);
+  useEffect(() => setPage((current) => Math.min(current, pages)), [pages]);
 
   const totals = useMemo(() => {
     const volume = visible.reduce((sum, row) => sum + Number(row.total_requests || 0), 0);
@@ -77,17 +84,18 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
           <Metric icon={IndianRupee} label="Recorded spend" value={fmtINR(totals.spend)} />
         </div>
 
-        {loading ? <div className="mt-5"><TableLoadingSkeleton rows={5} columns={5} /></div> : <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
+        {loading ? <div className="mt-5"><TableLoadingSkeleton rows={5} columns={5} /></div> : <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
               <tr><th className="px-4 py-2.5">Rank / Center</th><th className="px-4 py-2.5">Volume</th><th className="px-4 py-2.5">Approval</th><th className="px-4 py-2.5">Avg response</th><th className="px-4 py-2.5 text-right">Spend</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visible.map((center, index) => {
+              {paged.map((center, index) => {
                 const approval = center.total_requests ? Math.round((center.approved / center.total_requests) * 100) : 0;
                 return (
                   <tr key={center.code} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3"><span className="mr-3 font-mono text-slate-400">#{index + 1}</span><span className="font-semibold text-slate-900">{center.name}</span><span className="ml-2 font-mono text-[10px] text-slate-400">{center.code} · {center.city}</span></td>
+                    <td className="px-4 py-3"><span className="mr-3 font-mono text-slate-400">#{(page - 1) * pageSize + index + 1}</span><span className="font-semibold text-slate-900">{center.name}</span><span className="ml-2 font-mono text-[10px] text-slate-400">{center.code} · {center.city}</span></td>
                     <td className="px-4 py-3"><div className="flex items-center gap-2"><div className="h-1.5 w-24 overflow-hidden rounded bg-slate-100"><div className="h-full rounded bg-indigo-500" style={{ width: `${(center.total_requests / maxVolume) * 100}%` }} /></div><span className="font-mono">{center.total_requests}</span></div></td>
                     <td className="px-4 py-3 font-semibold text-emerald-700">{approval}%</td>
                     <td className={`px-4 py-3 font-mono font-semibold ${center.avg_response_hrs > 24 ? "text-rose-600" : center.avg_response_hrs > 12 ? "text-amber-600" : "text-emerald-700"}`}>{Math.round(center.avg_response_hrs || 0)}h</td>
@@ -98,6 +106,8 @@ export function HqAnalyticsPanel({ requests, centerCode }: { requests: RequestIt
               {!loading && visible.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">No performance data for this center yet.</td></tr>}
             </tbody>
           </table>
+          </div>
+          <TablePagination page={page} pageSize={pageSize} total={visible.length} onPage={setPage} onPageSize={setPageSize} />
         </div>}
       </div>
 

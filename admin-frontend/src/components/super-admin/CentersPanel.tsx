@@ -3,6 +3,7 @@ import { Building2, Plus, Edit2, Copy, Check, Sparkles, Search } from "lucide-re
 import { request } from "@/lib/api";
 import { type UserRow, type CenterRow } from "./shared";
 import { useCompanies } from "@/lib/directory";
+import { TablePagination } from "@/components/TablePagination";
 
 interface CentersAssignmentPanelProps {
   users: UserRow[];
@@ -39,6 +40,8 @@ export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const [centerQuery, setCenterQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -101,6 +104,10 @@ export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "
     return centers.filter(center => queries.every((query) =>
       `${center.code} ${center.name} ${center.city} ${center.company}`.toLowerCase().includes(query)));
   }, [centerQuery, centers, searchQuery]);
+  const pages = Math.max(1, Math.ceil(visibleCenters.length / pageSize));
+  const pagedCenters = useMemo(() => visibleCenters.slice((page - 1) * pageSize, page * pageSize), [page, pageSize, visibleCenters]);
+  useEffect(() => setPage(1), [centerQuery, pageSize, searchQuery]);
+  useEffect(() => setPage((current) => Math.min(current, pages)), [pages]);
 
   return (
     <div className="px-1 space-y-6">
@@ -138,9 +145,9 @@ export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "
           </div>
         </div>
 
-        <div className="request-scrollbar max-h-[min(62vh,620px)] overflow-y-auto p-3 sm:p-4">
+        <div className="p-3 sm:p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleCenters.map(c => {
+          {pagedCenters.map(c => {
             const count = employeeCountByCenter[c.code] ?? 0;
             return (
               <div key={c.code} className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-3.5 shadow-sm transition-all relative group">
@@ -189,6 +196,7 @@ export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "
             </div>
           )}
         </div>
+        <TablePagination page={page} pageSize={pageSize} total={visibleCenters.length} onPage={setPage} onPageSize={setPageSize} />
       </div>
 
       {/* Shareable Code Info Box */}

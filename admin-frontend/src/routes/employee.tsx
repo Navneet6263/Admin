@@ -46,24 +46,21 @@ function EmployeeConsole() {
   const pageSize = 25;
 
   const refresh = useCallback(async () => {
+    setInitialLoading(true);
     try {
       const me = await request<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>('/api/auth/me');
       setCurrentUser(me);
-      const [mine, centerList] = await Promise.allSettled([
-        getPagedRequests<RequestSummary>(`/api/employee/requests/${me.id}?view=${tab}&page=${page}&page_size=${pageSize}`),
-        request<Array<{ code: string; name: string; city: string }>>('/api/centers/public'),
-      ]);
-      if (mine.status === "fulfilled") {
-        setRequests(mine.value.data); setTotal(mine.value.total);
-        if (mine.value.summary) setSummary(mine.value.summary);
-      }
-      else console.error("Unable to refresh employee requests", mine.reason);
-      if (centerList.status === "fulfilled") setCenters(centerList.value);
-      else console.error("Unable to refresh centers", centerList.reason);
+      const mine = await getPagedRequests<RequestSummary>(`/api/employee/requests/${me.id}?view=${tab}&page=${page}&page_size=${pageSize}`);
+      setRequests(mine.data); setTotal(mine.total);
+      if (mine.summary) setSummary(mine.summary);
     } catch (error) { console.error(error); }
     finally { setInitialLoading(false); }
   }, [page, reloadKey, tab]);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void request<Array<{ code: string; name: string; city: string }>>('/api/centers/public')
+      .then(setCenters).catch((error) => console.error("Unable to refresh centers", error));
+  }, []);
   const loadReceipts = useCallback(async () => {
     try { setPendingReceipts(await request<ReceiptPrompt[]>("/api/employee/receipts/pending")); }
     catch (error) { console.error("Unable to load delivery confirmations", error); }

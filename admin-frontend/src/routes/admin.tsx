@@ -69,24 +69,25 @@ function HqAdminConsole() {
   const [actionError, setActionError] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
   const pageSize = 25;
-  const inventory = useInventory();
+  const inventory = useInventory(view === "inventory");
   const lowStockCount = inventory.filter(isLow).length;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (showLoading = false) => {
+    if (showLoading) setInitialLoading(true);
     const center = centerFilter ? `&center_code=${encodeURIComponent(centerFilter)}` : "";
     try {
       const result = await getPagedRequests<QueueSummary>(`/api/workflow/queue?status=${tab}&page=${page}&page_size=${pageSize}${center}`);
       setRequests(result.data); setTotal(result.total);
       if (result.summary) setSummary(result.summary);
     } catch (e) { console.error(e); }
-    finally { setInitialLoading(false); }
+    finally { if (showLoading) setInitialLoading(false); }
   }, [centerFilter, page, tab]);
   useEffect(() => {
-    void refresh();
-    void request<CenterOption[]>("/api/centers").then(setCenters).catch(console.error);
+    void refresh(true);
     const timer = window.setInterval(() => void refresh(), 15_000);
     return () => window.clearInterval(timer);
   }, [refresh]);
+  useEffect(() => { void request<CenterOption[]>("/api/centers").then(setCenters).catch(console.error); }, []);
 
   const counts = summary;
 

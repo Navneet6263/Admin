@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, Search, X } from "lucide-react";
 import { TablePagination } from "@/components/TablePagination";
 import { request } from "@/lib/api";
+import { TableLoadingSkeleton } from "@/components/LoadingSkeletons";
 interface Row {
   center_code: string;
   type: string;
@@ -15,9 +16,14 @@ export function ExpenseAnalytics({ centerCode = "" }: { centerCode?: string }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   useEffect(() => {
     const center = centerCode ? `?center_code=${encodeURIComponent(centerCode)}` : "";
-    request<Row[]>(`/api/payments/analytics/summary${center}`).then(setRows).catch(console.error);
+    setLoading(true); setError("");
+    request<Row[]>(`/api/payments/analytics/summary${center}`).then(setRows)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : "Expense ledger could not be loaded"))
+      .finally(() => setLoading(false));
   }, [centerCode]);
   const total = useMemo(() => rows.reduce((n, r) => n + Number(r.total_spend), 0), [rows]);
   const pending = rows.reduce((n, r) => n + Number(r.pending_count), 0);
@@ -75,7 +81,8 @@ export function ExpenseAnalytics({ centerCode = "" }: { centerCode?: string }) {
           </button>
         )}
       </div>
-      <div className="overflow-hidden rounded-md border border-slate-100">
+      {error && <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
+      {loading ? <TableLoadingSkeleton rows={6} columns={6} /> : <div className="overflow-hidden rounded-md border border-slate-100">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 text-slate-500 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
@@ -118,6 +125,7 @@ export function ExpenseAnalytics({ centerCode = "" }: { centerCode?: string }) {
           onPageSize={setPageSize}
         />
       </div>
+      }
     </section>
   );
 }

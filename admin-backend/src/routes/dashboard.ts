@@ -113,6 +113,8 @@ router.get('/burn-rate', async (_req: Request, res: Response) => {
 // ── GET /api/dashboard/peer-comparison ───────────────────────
 // Center rankings: response time, approval rate, request volume
 router.get('/peer-comparison', async (_req: Request, res: Response) => {
+  const cached = getCached<unknown>('cmd:peers');
+  if (cached) return res.json(cached);
   try {
     const result = await pool.request().query(`
       SELECT
@@ -129,6 +131,7 @@ router.get('/peer-comparison', async (_req: Request, res: Response) => {
       GROUP BY c.code, c.name, c.city
       ORDER BY avg_response_hrs ASC
     `);
+    setCache('cmd:peers', result.recordset);
     res.json(result.recordset);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Peer comparison failed' }); }
 });

@@ -37,6 +37,15 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   enforceTrustedOrigin(req, res, next);
 });
+const slowApiMs = Math.max(250, Number(process.env.SLOW_API_MS) || 1000);
+app.use('/api', (req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - startedAt;
+    if (duration >= slowApiMs) console.warn(`[SLOW API] ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
+  });
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/teams',          requireAuth(), teamsRoutes);
