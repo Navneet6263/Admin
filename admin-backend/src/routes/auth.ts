@@ -22,6 +22,22 @@ router.post("/login", loginRateLimit, async (req, res) => {
   }
 });
 
+router.get("/register-options", async (_req, res) => {
+  try {
+    const [companies, teams, centers] = await Promise.all([
+      pool.request().query(`SELECT id,code,name FROM companies ORDER BY name ASC`),
+      pool.request().query(`SELECT id,name,company FROM teams ORDER BY company ASC,name ASC`),
+      pool.request().query(`SELECT id,code,name,city,company,is_active
+        FROM centers WHERE is_active=1 ORDER BY company ASC,city ASC,name ASC`),
+    ]);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ companies: companies.recordset, teams: teams.recordset, centers: centers.recordset });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Registration options unavailable" });
+  }
+});
+
 router.post("/register", async (req, res) => {
   const name = String(req.body?.name || "").trim();
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -29,13 +45,16 @@ router.post("/register", async (req, res) => {
   const company = String(req.body?.company || "").trim();
   const dept = String(req.body?.dept || "").trim();
   const centerCode = String(req.body?.center_code || "").trim().toUpperCase();
+  const employeeCode = String(req.body?.employee_code || "").trim().toUpperCase();
   res.setHeader('Cache-Control', 'no-store');
-  if (!name || !email || !password || !company || !dept || !centerCode)
-    return res.status(400).json({ error: "Name, email, password, company, department and center are required" });
-  if (name.length > 100 || email.length > 100 || company.length > 100 || dept.length > 80 || centerCode.length > 10)
+  if (!name || !email || !password || !company || !dept || !centerCode || !employeeCode)
+    return res.status(400).json({ error: "Name, employee ID, email, password, company, department and center are required" });
+  if (name.length > 100 || email.length > 100 || company.length > 100 || dept.length > 80 || centerCode.length > 10 || employeeCode.length > 40)
     return res.status(400).json({ error: "One or more fields exceed the allowed length" });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: "Enter a valid email address" });
+  if (!/^[A-Z0-9_-]{2,40}$/.test(employeeCode))
+    return res.status(400).json({ error: "Employee ID may contain only letters, numbers, hyphen or underscore" });
   const invalidPassword = passwordError(password);
   if (invalidPassword) return res.status(400).json({ error: invalidPassword });
 
@@ -48,18 +67,21 @@ router.post("/register", async (req, res) => {
       .input("company", mssql.NVarChar(100), company)
       .input("dept", mssql.NVarChar(80), dept)
       .input("cc", mssql.NVarChar(10), centerCode)
+      .input("emp", mssql.NVarChar(40), employeeCode)
       .input("hash", mssql.NVarChar(256), hashPassword(password))
       .query(`
+        IF EXISTS(SELECT 1 FROM users WHERE employee_code=@emp)
+          THROW 51104,'Employee ID already exists',1;
         IF NOT EXISTS(SELECT 1 FROM companies WHERE name=@company)
           THROW 51101,'Select a valid company',1;
         IF NOT EXISTS(SELECT 1 FROM teams WHERE company=@company AND name=@dept)
           THROW 51102,'Select a valid department',1;
-        IF NOT EXISTS(SELECT 1 FROM centers WHERE code=@cc AND company=@company AND is_active=1)
-          THROW 51103,'Select an active center for this company',1;
-        INSERT INTO users(email,name,role,company,dept,center_code,password_hash,is_active)
+        IF NOT EXISTS(SELECT 1 FROM centers WHERE code=@cc AND is_active=1)
+          THROW 51103,'Select an active center',1;
+        INSERT INTO users(email,name,role,company,dept,employee_code,center_code,password_hash,is_active)
         OUTPUT inserted.id,inserted.email,inserted.name,inserted.role,inserted.company,
-          inserted.dept,inserted.center_code
-        VALUES(@email,@name,'employee',@company,@dept,@cc,@hash,1);
+          inserted.dept,inserted.employee_code,inserted.center_code
+        VALUES(@email,@name,'employee',@company,@dept,@emp,@cc,@hash,1);
       `);
     const user = result.recordset[0];
     await tx.request().input("uid", mssql.Int, user.id).input("cc", mssql.NVarChar(10), centerCode)
@@ -73,6 +95,7 @@ router.post("/register", async (req, res) => {
     try { await tx.rollback(); } catch { /* transaction already closed */ }
     const message = error instanceof Error ? error.message : "Registration failed";
     if (/valid company|valid department|active center/i.test(message)) return res.status(400).json({ error: message });
+    if (/Employee ID already exists/i.test(message)) return res.status(409).json({ error: "Employee ID already exists" });
     if (/UNIQUE|duplicate/i.test(message)) return res.status(409).json({ error: "User with this email already exists" });
     console.error(error);
     res.status(500).json({ error: "Registration failed" });

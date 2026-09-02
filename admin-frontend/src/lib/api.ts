@@ -10,6 +10,7 @@ export type SessionUser = {
   role: string;
   company: string;
   dept: string;
+  employee_code?: string | null;
   center_code?: string | null;
 };
 
@@ -39,7 +40,7 @@ export const session = {
     verifiedAt = Date.now();
     return data.user;
   },
-  async register(details: { name: string; email: string; password: string; company?: string; dept?: string; center_code?: string }) {
+  async register(details: { name: string; email: string; password: string; company?: string; dept?: string; center_code?: string; employee_code?: string }) {
     const data = await request<{ user: SessionUser }>('/api/auth/register', { method: 'POST', body: details }, false);
     localStorage.removeItem(tokenKey);
     localStorage.setItem(userKey, JSON.stringify(data.user));

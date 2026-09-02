@@ -114,13 +114,14 @@ export interface RequesterProfile {
   email: string;
   company: string;
   dept: string;
+  employee_code?: string | null;
   center_code?: string | null;
 }
 export const emptyIdCard = (): IdCardState => ({ issueType: "new", reason: "", designation: "", phone: "",
   bloodGroup: "", emergencyPhone: "", photoDataUrl: "", confirmed: false });
 export const idCardDetails = (value: IdCardState, profile?: RequesterProfile): IdCardDetails => ({
   brand: "vision_india", name: profile?.name || "Authenticated employee",
-  employeeCode: profile?.id ? `EMP-${String(profile.id).padStart(4, "0")}` : "EMP-PENDING",
+  employeeCode: profile?.employee_code || (profile?.id ? `EMP-${String(profile.id).padStart(4, "0")}` : "EMP-PENDING"),
   designation: value.designation.trim() || profile?.dept || "—", department: profile?.dept || "—",
   phone: value.phone, bloodGroup: value.bloodGroup, emergencyPhone: value.emergencyPhone, photoDataUrl: value.photoDataUrl,
 });

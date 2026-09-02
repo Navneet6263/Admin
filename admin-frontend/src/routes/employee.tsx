@@ -33,7 +33,7 @@ function EmployeeConsole() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [prefillType, setPrefillType] = useState<RequestType | null>(null);
   const [confirmWithdraw, setConfirmWithdraw] = useState<RequestItem | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>({
+  const [currentUser, setCurrentUser] = useState<{ id: number; name: string; email: string; dept: string; company: string; employee_code?: string | null; center_code?: string | null }>({
     id: 0, name: "", email: "", dept: "", company: "", center_code: null
   });
   const [centers, setCenters] = useState<Array<{ code: string; name: string; city: string }>>([]);
@@ -48,7 +48,7 @@ function EmployeeConsole() {
   const refresh = useCallback(async () => {
     setInitialLoading(true);
     try {
-      const me = await request<{ id: number; name: string; email: string; dept: string; company: string; center_code?: string | null }>('/api/auth/me');
+      const me = await request<{ id: number; name: string; email: string; dept: string; company: string; employee_code?: string | null; center_code?: string | null }>('/api/auth/me');
       setCurrentUser(me);
       const mine = await getPagedRequests<RequestSummary>(`/api/employee/requests/${me.id}?view=${tab}&page=${page}&page_size=${pageSize}`);
       setRequests(mine.data); setTotal(mine.total);

@@ -105,6 +105,14 @@ async function runMigrations() {
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('users') AND name='center_code')
         ALTER TABLE users ADD center_code NVARCHAR(10) NULL`);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('users') AND name='employee_code')
+        ALTER TABLE users ADD employee_code NVARCHAR(40) NULL`);
+    // Keep index creation in a separate batch. SQL Server compiles a batch
+    // before ALTER TABLE runs and otherwise reports "Invalid column name".
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('users') AND name='UX_users_employee_code')
+        CREATE UNIQUE INDEX UX_users_employee_code ON users(employee_code) WHERE employee_code IS NOT NULL`);
 
     // HQ and Super Admin are global roles; center assignment is only a dashboard filter.
     await pool.request().query(`

@@ -6,6 +6,7 @@ export interface CenterOption {
   code: string;
   name: string;
   city: string;
+  company?: string;
 }
 
 interface Props {
@@ -16,15 +17,16 @@ interface Props {
   dark?: boolean;
   required?: boolean;
   disabled?: boolean;
+  showCompany?: boolean;
   className?: string;
 }
 
-const centerLabel = (center: CenterOption) => {
+const centerLabel = (center: CenterOption, showCompany = false) => {
   const place = center.name === center.city ? center.name : `${center.name}, ${center.city}`;
-  return `${center.code} · ${place}`;
+  return `${center.code} · ${place}${showCompany && center.company ? ` · ${center.company}` : ""}`;
 };
 
-export function CenterCombobox({ centers, value, onChange, placeholder = "Search center…", dark = false, required, disabled, className = "" }: Props) {
+export function CenterCombobox({ centers, value, onChange, placeholder = "Search center…", dark = false, required, disabled, showCompany = false, className = "" }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return centers;
-    return centers.filter(center => `${center.code} ${center.name} ${center.city}`.toLowerCase().includes(term));
+    return centers.filter(center => `${center.code} ${center.name} ${center.city} ${center.company || ""}`.toLowerCase().includes(term));
   }, [centers, query]);
 
   useEffect(() => setActive(0), [query]);
@@ -86,7 +88,7 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
       <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${dark ? "text-slate-400" : "text-slate-500"}`} />
       <input
         ref={field}
-        value={open ? query : selected ? centerLabel(selected) : ""}
+        value={open ? query : selected ? centerLabel(selected, showCompany) : ""}
         required={required}
         disabled={disabled}
         placeholder={placeholder}
@@ -111,7 +113,7 @@ export function CenterCombobox({ centers, value, onChange, placeholder = "Search
         onMouseEnter={() => setActive(index)} onClick={() => choose(center)}
         className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-xs ${index === active ? (dark ? "bg-white/10" : "bg-slate-100") : ""}`}
       >
-        <span className="min-w-0 flex-1"><b className="font-mono">{center.code}</b><span className={dark ? "text-slate-300" : "text-slate-600"}> · {center.name}{center.city !== center.name ? `, ${center.city}` : ""}</span></span>
+        <span className="min-w-0 flex-1"><b className="font-mono">{center.code}</b><span className={dark ? "text-slate-300" : "text-slate-600"}> · {center.name}{center.city !== center.name ? `, ${center.city}` : ""}{showCompany && center.company ? ` · ${center.company}` : ""}</span></span>
         {center.code === value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />}
       </button>) : <p className={`px-3 py-5 text-center text-xs ${dark ? "text-slate-400" : "text-slate-500"}`}>No center found</p>}
     </div>, document.body)}

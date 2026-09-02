@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CenterCombobox } from "@/components/CenterCombobox";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
 import { request, session } from "@/lib/api";
@@ -16,6 +16,10 @@ export const Route = createFileRoute("/")({
 });
 
 type Mode = "signin" | "register" | "forgot";
+type CompanyOption = { id: number; code: string; name: string };
+type TeamOption = { id: number; name: string; company: string };
+type CenterOption = { id: number; code: string; name: string; city: string; company: string; is_active: boolean };
+type RegisterOptions = { companies: CompanyOption[]; teams: TeamOption[]; centers: CenterOption[] };
 
 const inputClass =
   "w-full border border-slate-300 rounded-sm px-3.5 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all font-sans";
@@ -25,11 +29,12 @@ function Home() {
   const navigate = useNavigate();
   const [showLoginCard, setShowLoginCard] = useState(false);
   const [mode, setMode] = useState<Mode>("signin");
-  const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
-  const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string }>>([]);
-  const [centers, setCenters] = useState<Array<{ id: number; code: string; name: string; city: string; company: string; is_active: boolean }>>([]);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [companiesList, setCompaniesList] = useState<CompanyOption[]>([]);
+  const [centers, setCenters] = useState<CenterOption[]>([]);
   const [formData, setFormData] = useState({
     name: "",
+    employee_code: "",
     email: "",
     password: "",
     company: "",
@@ -39,6 +44,8 @@ function Home() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mastersLoading, setMastersLoading] = useState(false);
+  const [mastersError, setMastersError] = useState("");
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -46,14 +53,13 @@ function Home() {
     setError("");
   };
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      request<Array<{ id: number; code: string; name: string }>>('/api/companies', {}, false),
-      request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false),
-      request<Array<{ id: number; code: string; name: string; city: string; company: string; is_active: boolean }>>('/api/centers/public', {}, false),
-    ]).then(([companies, departments, activeCenters]) => {
-      if (!active) return;
+  const loadRegisterOptions = useCallback(async () => {
+    if (companiesList.length && teams.length && centers.length) return;
+    setMastersLoading(true);
+    setMastersError("");
+    try {
+      const { companies, teams: departments, centers: activeCenters } =
+        await request<RegisterOptions>('/api/auth/register-options', {}, false);
       setCompaniesList(companies);
       setTeams(departments);
       setCenters(activeCenters);
@@ -62,17 +68,21 @@ function Home() {
         ...current,
         company: defaultCompany,
         department: departments.find((team) => team.company === defaultCompany)?.name || "",
-        center_code: activeCenters.find((center) => center.company === defaultCompany)?.code || "",
+        center_code: activeCenters[0]?.code || "",
       });
-    }).catch((cause) => {
-      console.error("Unable to load registration masters", cause);
-    });
-    return () => { active = false; };
-  }, []);
+    } catch (cause) {
+      if (import.meta.env.DEV) console.error("Unable to load registration masters", cause);
+      setMastersError("Registration details are temporarily unavailable.");
+    } finally {
+      setMastersLoading(false);
+    }
+  }, [centers.length, companiesList.length, teams.length]);
+
+  useEffect(() => {
+    if (showLoginCard && mode === "register") void loadRegisterOptions();
+  }, [loadRegisterOptions, mode, showLoginCard]);
 
   const filteredTeams = useMemo(() => teams.filter((team) => team.company === formData.company), [formData.company, teams]);
-  const filteredCenters = useMemo(() => centers.filter((center) => center.company === formData.company), [centers, formData.company]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -99,8 +109,13 @@ function Home() {
         setLoading(false);
       }
     } else if (mode === "register") {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.company || !formData.department || !formData.center_code) {
-        setError("Please fill in Name, Email, Password, Company, Department and Center.");
+      if (!formData.name.trim() || !formData.employee_code.trim() || !formData.email.trim() || !formData.password.trim()
+        || !formData.company || !formData.department || !formData.center_code) {
+        setError("Please fill in Name, Employee ID, Email, Password, Company, Department and Center.");
+        return;
+      }
+      if (!/^[A-Za-z0-9_-]{2,40}$/.test(formData.employee_code.trim())) {
+        setError("Employee ID may contain only letters, numbers, hyphen or underscore.");
         return;
       }
       setLoading(true);
@@ -112,6 +127,7 @@ function Home() {
           company: formData.company,
           dept: formData.department,
           center_code: formData.center_code,
+          employee_code: formData.employee_code.trim(),
         });
         const routes: Record<string, string> = {
           super_admin: '/super-admin',
@@ -211,18 +227,11 @@ function Home() {
                     >
                       GET STARTED
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => { switchMode("register"); setShowLoginCard(true); }}
-                      className="mt-3 block text-xs font-bold tracking-[0.18em] uppercase text-white underline decoration-white/60 underline-offset-4 hover:text-white/80"
-                    >
-                      Register employee
-                    </button>
                   </div>
                 </div>
               ) : (
                 /* Crisp White Login Card */
-                <div className="w-full md:w-[380px] max-h-[calc(100vh-7rem)] overflow-y-auto bg-white rounded-sm shadow-2xl p-8 md:p-10 text-slate-900 animate-in fade-in slide-in-from-right-8 duration-300 relative justify-self-end">
+                <div className={`w-full bg-white rounded-sm shadow-2xl p-7 md:p-8 text-slate-900 animate-in fade-in slide-in-from-right-8 duration-300 relative justify-self-end ${mode === "register" ? "md:w-[620px] lg:w-[680px]" : "md:w-[380px]"}`}>
                   {/* Close Button */}
                   <button
                     type="button"
@@ -280,7 +289,7 @@ function Home() {
                       >
                         {mode === "signin" ? "Sign In" : mode === "register" ? "Register" : "Reset Password"}
                       </h2>
-                      <p className="text-sm text-slate-500 mb-6">
+                      <p className={`text-sm text-slate-500 ${mode === "register" ? "mb-4" : "mb-6"}`}>
                         {mode === "signin"
                           ? "Access your department request dashboard"
                           : mode === "register"
@@ -288,23 +297,39 @@ function Home() {
                           : "We'll email you a secure reset link"}
                       </p>
 
-                      <form onSubmit={handleSubmit} className="space-y-4">
+                      <form onSubmit={handleSubmit} className={mode === "register" ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "space-y-4"}>
                         {mode === "register" && (
-                          <div>
-                            <label htmlFor="reg-name" className={labelClass}>
-                              Full Name
-                            </label>
-                            <input
-                              id="reg-name"
-                              type="text"
-                              required
-                              autoComplete="name"
-                              value={formData.name}
-                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                              className={inputClass}
-                              placeholder="Jane Doe"
-                            />
-                          </div>
+                          <>
+                            <div>
+                              <label htmlFor="reg-name" className={labelClass}>
+                                Full Name
+                              </label>
+                              <input
+                                id="reg-name"
+                                type="text"
+                                required
+                                autoComplete="name"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                className={inputClass}
+                                placeholder="Jane Doe"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="reg-employee-id" className={labelClass}>
+                                Employee ID
+                              </label>
+                              <input
+                                id="reg-employee-id"
+                                type="text"
+                                required
+                                value={formData.employee_code}
+                                onChange={(e) => setFormData({ ...formData, employee_code: e.target.value.toUpperCase() })}
+                                className={inputClass}
+                                placeholder="EMP-0003"
+                              />
+                            </div>
+                          </>
                         )}
 
                         <div>
@@ -325,6 +350,23 @@ function Home() {
 
                         {mode === "register" && (
                           <>
+                            {mastersLoading && (
+                              <div className="sm:col-span-2 rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                Loading company, center and department lists...
+                              </div>
+                            )}
+                            {mastersError && (
+                              <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-sm border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                <span>{mastersError}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void loadRegisterOptions()}
+                                  className="shrink-0 font-semibold text-slate-900 underline underline-offset-2"
+                                >
+                                  Try again
+                                </button>
+                              </div>
+                            )}
                             <div>
                               <label htmlFor="login-company" className={labelClass}>
                                 Company / Brand
@@ -339,10 +381,11 @@ function Home() {
                                     ...formData,
                                     company,
                                     department: teams.find((team) => team.company === company)?.name || "",
-                                    center_code: centers.find((center) => center.company === company)?.code || "",
+                                    center_code: formData.center_code || centers[0]?.code || "",
                                   });
                                 }}
                                 className={inputClass}
+                                disabled={mastersLoading || Boolean(mastersError)}
                               >
                                 <option value="" disabled>Select company</option>
                                 {companiesList.map((c) => (
@@ -355,10 +398,11 @@ function Home() {
 
                             <div>
                               <label htmlFor="login-center" className={labelClass}>Your Home Center</label>
-                              <CenterCombobox centers={filteredCenters} value={formData.center_code}
+                              <CenterCombobox centers={centers} value={formData.center_code}
+                                disabled={mastersLoading || Boolean(mastersError)}
+                                showCompany
                                 onChange={(center_code) => setFormData({ ...formData, center_code })}
-                                placeholder="Search by center, city or code…" required />
-                              <p className="mt-1 text-[10px] text-slate-500">Only the center code is stored; full name comes dynamically from the database.</p>
+                                placeholder="Search by center, city, company or code…" required />
                             </div>
 
                             <div>
@@ -371,6 +415,7 @@ function Home() {
                                 value={formData.department}
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 className={inputClass}
+                                disabled={mastersLoading || Boolean(mastersError)}
                               >
                                 {filteredTeams.length > 0 ? (
                                   filteredTeams.map((t) => (
@@ -407,7 +452,7 @@ function Home() {
                         )}
 
                         {error && (
-                          <div className="flex items-center gap-2 p-3 rounded-sm bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                          <div className={`flex items-center gap-2 p-3 rounded-sm bg-rose-50 border border-rose-200 text-rose-700 text-xs ${mode === "register" ? "sm:col-span-2" : ""}`}>
                             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                             <span>{error}</span>
                           </div>
@@ -431,8 +476,8 @@ function Home() {
 
                         <button
                           type="submit"
-                          disabled={loading}
-                          className="w-full mt-2 px-6 py-3 text-sm font-semibold tracking-[0.1em] uppercase bg-slate-900 text-white rounded-sm hover:bg-slate-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                          disabled={loading || (mode === "register" && (mastersLoading || Boolean(mastersError)))}
+                          className={`w-full mt-2 px-6 py-3 text-sm font-semibold tracking-[0.1em] uppercase bg-slate-900 text-white rounded-sm hover:bg-slate-800 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${mode === "register" ? "sm:col-span-2" : ""}`}
                         >
                           {loading ? (
                             <Loader2 className="w-4 h-4 animate-spin text-white" />
