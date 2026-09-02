@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CenterCombobox } from "@/components/CenterCombobox";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
 import { session } from "@/lib/api";
@@ -27,7 +27,7 @@ function Home() {
   const [mode, setMode] = useState<Mode>("signin");
   const [teams, setTeams] = useState<Array<{ id: number; name: string; company: string }>>([]);
   const [companiesList, setCompaniesList] = useState<Array<{ id: number; code: string; name: string }>>([]);
-  const [centers, setCenters] = useState<Array<{ id: number; code: string; name: string; city: string; is_active: boolean }>>([]);
+  const [centers, setCenters] = useState<Array<{ id: number; code: string; name: string; city: string; company: string; is_active: boolean }>>([]);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -45,6 +45,33 @@ function Home() {
     setSubmitted(false);
     setError("");
   };
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      request<Array<{ id: number; code: string; name: string }>>('/api/companies', {}, false),
+      request<Array<{ id: number; name: string; company: string }>>('/api/teams', {}, false),
+      request<Array<{ id: number; code: string; name: string; city: string; company: string; is_active: boolean }>>('/api/centers/public', {}, false),
+    ]).then(([companies, departments, activeCenters]) => {
+      if (!active) return;
+      setCompaniesList(companies);
+      setTeams(departments);
+      setCenters(activeCenters);
+      const defaultCompany = companies[0]?.name || "";
+      setFormData((current) => current.company ? current : {
+        ...current,
+        company: defaultCompany,
+        department: departments.find((team) => team.company === defaultCompany)?.name || "",
+        center_code: activeCenters.find((center) => center.company === defaultCompany)?.code || "",
+      });
+    }).catch((cause) => {
+      console.error("Unable to load registration masters", cause);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const filteredTeams = useMemo(() => teams.filter((team) => team.company === formData.company), [formData.company, teams]);
+  const filteredCenters = useMemo(() => centers.filter((center) => center.company === formData.company), [centers, formData.company]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,8 +99,8 @@ function Home() {
         setLoading(false);
       }
     } else if (mode === "register") {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.company || !formData.center_code) {
-        setError("Please fill in Name, Email, Password, Company and Center.");
+      if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.company || !formData.department || !formData.center_code) {
+        setError("Please fill in Name, Email, Password, Company, Department and Center.");
         return;
       }
       setLoading(true);
@@ -106,7 +133,7 @@ function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-900 select-none">
-      <div className="relative w-full min-h-screen overflow-hidden">
+      <div className="relative w-full min-h-screen overflow-x-hidden">
         {/* Full-Screen Wallpaper */}
         <img
           src={heroImage}
@@ -179,16 +206,23 @@ function Home() {
                   <div className="pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowLoginCard(true)}
+                      onClick={() => { switchMode("signin"); setShowLoginCard(true); }}
                       className="px-10 py-4 text-xs font-bold tracking-[0.2em] uppercase bg-white text-slate-900 rounded-sm hover:bg-slate-100 transition-all duration-300 shadow-2xl hover:scale-105 cursor-pointer"
                     >
                       GET STARTED
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { switchMode("register"); setShowLoginCard(true); }}
+                      className="mt-3 block text-xs font-bold tracking-[0.18em] uppercase text-white underline decoration-white/60 underline-offset-4 hover:text-white/80"
+                    >
+                      Register employee
                     </button>
                   </div>
                 </div>
               ) : (
                 /* Crisp White Login Card */
-                <div className="w-full md:w-[380px] bg-white rounded-sm shadow-2xl p-8 md:p-10 text-slate-900 animate-in fade-in slide-in-from-right-8 duration-300 relative justify-self-end">
+                <div className="w-full md:w-[380px] max-h-[calc(100vh-7rem)] overflow-y-auto bg-white rounded-sm shadow-2xl p-8 md:p-10 text-slate-900 animate-in fade-in slide-in-from-right-8 duration-300 relative justify-self-end">
                   {/* Close Button */}
                   <button
                     type="button"
@@ -250,7 +284,7 @@ function Home() {
                         {mode === "signin"
                           ? "Access your department request dashboard"
                           : mode === "register"
-                          ? "Create your staff account in seconds"
+                          ? "Create an employee account with your company center"
                           : "We'll email you a secure reset link"}
                       </p>
 
@@ -299,9 +333,18 @@ function Home() {
                                 id="login-company"
                                 required
                                 value={formData.company}
-                                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                                onChange={(e) => {
+                                  const company = e.target.value;
+                                  setFormData({
+                                    ...formData,
+                                    company,
+                                    department: teams.find((team) => team.company === company)?.name || "",
+                                    center_code: centers.find((center) => center.company === company)?.code || "",
+                                  });
+                                }}
                                 className={inputClass}
                               >
+                                <option value="" disabled>Select company</option>
                                 {companiesList.map((c) => (
                                   <option key={c.id} value={c.name}>
                                     {c.name}
@@ -312,7 +355,7 @@ function Home() {
 
                             <div>
                               <label htmlFor="login-center" className={labelClass}>Your Home Center</label>
-                              <CenterCombobox centers={centers} value={formData.center_code}
+                              <CenterCombobox centers={filteredCenters} value={formData.center_code}
                                 onChange={(center_code) => setFormData({ ...formData, center_code })}
                                 placeholder="Search by center, city or code…" required />
                               <p className="mt-1 text-[10px] text-slate-500">Only the center code is stored; full name comes dynamically from the database.</p>
@@ -329,8 +372,8 @@ function Home() {
                                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                                 className={inputClass}
                               >
-                                {teams.length > 0 ? (
-                                  teams.map((t) => (
+                                {filteredTeams.length > 0 ? (
+                                  filteredTeams.map((t) => (
                                     <option key={t.id} value={t.name}>
                                       {t.name}
                                     </option>
@@ -415,8 +458,31 @@ function Home() {
                               Sign In
                             </button>
                           </>
+                        ) : mode === "register" ? (
+                          <>
+                            Already have an account?{" "}
+                            <button
+                              type="button"
+                              onClick={() => switchMode("signin")}
+                              className="text-slate-900 underline underline-offset-2 font-medium"
+                            >
+                              Sign In
+                            </button>
+                          </>
                         ) : (
-                          <>Accounts are created by authorized administrators.</>
+                          <>
+                            New employee?{" "}
+                            <button
+                              type="button"
+                              onClick={() => switchMode("register")}
+                              className="text-slate-900 underline underline-offset-2 font-medium"
+                            >
+                              Register here
+                            </button>
+                            <span className="mt-1 block text-[11px]">
+                              Admin and finance roles are created by authorized administrators.
+                            </span>
+                          </>
                         )}
                       </p>
                     </>
