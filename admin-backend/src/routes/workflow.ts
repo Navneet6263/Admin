@@ -4,7 +4,7 @@ import { effectiveRole, requireAssignedCenter } from "../auth";
 import { pool } from "../db";
 import { completeApproval } from "../services/approval";
 import { notify, notifyRole } from "../services/notifications";
-import { readWorkflowQueue } from "../services/workflowQueue";
+import { readWorkflowQueue, readWorkflowRequest } from "../services/workflowQueue";
 import { markAssigned, resolveDeliveryIssue } from "../services/fulfillment";
 
 const router = Router();
@@ -15,6 +15,19 @@ router.get("/queue", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Queue unavailable" });
+  }
+});
+
+router.get("/requests/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "Invalid request ID" });
+  try {
+    const request = await readWorkflowRequest(req.user!, id);
+    if (!request) return res.status(404).json({ error: "Request not found" });
+    res.json(request);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Request details unavailable" });
   }
 });
 

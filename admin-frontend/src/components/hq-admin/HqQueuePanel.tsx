@@ -5,11 +5,13 @@ import {
 } from "@/components/hq-admin/AdminFilters";
 import type { RequestItem, RequestType, Priority } from "@/components/models";
 import { PaginationBar } from "@/components/PaginationBar";
+import { PanelLoadingSkeleton } from "@/components/LoadingSkeletons";
 import { AlertTriangle, CheckCircle2, PackageCheck } from "lucide-react";
 
 interface Props {
   filtered: RequestItem[];
   selected?: RequestItem;
+  detailLoading: boolean;
   checked: Set<string>;
   typeFilter: RequestType | "all";
   priorityFilter: Priority | "all";
@@ -39,7 +41,7 @@ interface Props {
 }
 
 export function HqQueuePanel({
-  filtered, selected, checked,
+  filtered, selected, detailLoading, checked,
   typeFilter, priorityFilter, companyFilter, ageFilter, sortBy, query,
   page, pageSize, total, onPageChange,
   onTypeFilter, onPriorityFilter, onCompanyFilter, onAgeFilter, onSortBy, onQuery,
@@ -127,8 +129,10 @@ export function HqQueuePanel({
           </button>
         </div>}
         <div className="min-h-0 flex-1 overflow-hidden">
-        {selected ? (
-          <RequestDetail request={selected} onAction={onDetailAction} readOnly={!selected.canAct} />
+        {detailLoading ? (
+          <PanelLoadingSkeleton />
+        ) : selected ? (
+          <RequestDetail key={selected.id} request={selected} onAction={onDetailAction} readOnly={!selected.canAct} />
         ) : (
           <div className="h-full grid place-items-center text-sm text-slate-400">Select a request to review.</div>
         )}

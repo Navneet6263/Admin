@@ -98,6 +98,12 @@ const statements = [
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_requests_routing')
     CREATE INDEX IX_requests_routing ON requests(approval_center_code,workflow_status,created_at DESC)
       INCLUDE(user_id,type,amount,charge_center_code,payment_status)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('requests') AND name='IX_requests_queue_status_created')
+    CREATE INDEX IX_requests_queue_status_created ON requests(status,created_at DESC,id DESC)
+      INCLUDE(user_id,approval_center_code,workflow_status)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('requests') AND name='IX_requests_queue_created')
+    CREATE INDEX IX_requests_queue_created ON requests(created_at DESC,id DESC)
+      INCLUDE(user_id,status,approval_center_code,workflow_status)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_requests_employee_submission')
     CREATE UNIQUE INDEX UX_requests_employee_submission ON requests(user_id,client_request_id)
       WHERE client_request_id IS NOT NULL`,
@@ -109,6 +115,9 @@ const statements = [
       INCLUDE(ref_id,type,status,workflow_status,payment_status,priority,amount)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_assignments_queue')
     CREATE INDEX IX_assignments_queue ON request_assignments(role,center_code,is_active,can_act) INCLUDE(request_id,user_id)`,
+  `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('request_assignments') AND name='IX_assignments_request_role')
+    CREATE INDEX IX_assignments_request_role ON request_assignments(request_id,role,is_active,user_id)
+      INCLUDE(center_code,can_act,assignment_type)`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_admin_audit_target')
     CREATE INDEX IX_admin_audit_target ON admin_audit_events(target_user_id,created_at DESC)
       INCLUDE(actor_id,event_type,note)`,

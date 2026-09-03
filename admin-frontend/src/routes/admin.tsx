@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { InventoryPanel } from "@/components/InventoryPanel";
 import { useInventory, isLow } from "@/components/liveInventory";
@@ -10,7 +10,7 @@ import { HqAnalyticsPanel } from "@/components/hq-admin/HqAnalyticsPanel";
 import { ExpenseAnalytics } from "@/components/analytics/ExpenseAnalytics";
 import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
 import { TeamTab } from "@/components/super-admin/TeamTab";
-import { getPagedRequests, request } from "@/lib/api";
+import { getPagedRequests, request, toRequest } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2 } from "lucide-react";
 import { protectedRoute } from "@/components/ProtectedRoute";
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/admin")({
 
 type Tab = "inbox" | "queued" | "ready_to_assign" | "delivery_issues" | "approved" | "rejected" | "withdrawn" | "all";
 type QueueSummary = Record<Tab, number>;
+type QueuePage = { data: RequestItem[]; total: number; summary?: QueueSummary };
 
 function HqAdminConsole() {
   const sessionUser = useSessionUser();
@@ -37,17 +38,6 @@ function HqAdminConsole() {
     name: sessionUser?.name || "Authenticated HQ Admin",
     role: sessionUser?.dept || "HQ Admin",
   }), [sessionUser]);
-
-  const actorTag = useCallback(() => `${currentAdmin.name} (${currentAdmin.id})`, [currentAdmin]);
-  const autoNote = useCallback((action: "approve" | "reject" | "queue" | "info", userNote: string) => {
-    const ts = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-    const verb =
-      action === "approve" ? "Approved and completed" :
-      action === "reject" ? "Rejected" :
-      action === "queue" ? "Queued for Super Admin" : "Info requested";
-    const head = `${verb} by ${actorTag()} · ${ts} IST`;
-    return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
-  }, [actorTag]);
 
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [view, setView] = useState<"requests" | "analytics" | "inventory" | "expenses" | "team">("requests");
@@ -68,24 +58,57 @@ function HqAdminConsole() {
     approved: 0, rejected: 0, withdrawn: 0, all: 0 });
   const [actionError, setActionError] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
+  const [selectedDetail, setSelectedDetail] = useState<RequestItem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const queueRequest = useRef<AbortController | null>(null);
+  const queueCache = useRef(new Map<string, { at: number; page: QueuePage }>());
+  const hasLoadedQueue = useRef(false);
+  const detailCache = useRef(new Map<number, { updatedAt: string; request: RequestItem }>());
   const pageSize = 25;
   const inventory = useInventory(view === "inventory");
   const lowStockCount = inventory.filter(isLow).length;
 
   const refresh = useCallback(async (showLoading = false) => {
-    if (showLoading) setInitialLoading(true);
+    if (showLoading && !hasLoadedQueue.current) setInitialLoading(true);
+    const cacheKey = `${tab}:${page}:${centerFilter || "all"}`;
+    const cached = queueCache.current.get(cacheKey);
+    if (showLoading && cached && Date.now() - cached.at < 15_000) {
+      setRequests(cached.page.data); setTotal(cached.page.total);
+      if (cached.page.summary) setSummary(cached.page.summary);
+      hasLoadedQueue.current = true;
+      setInitialLoading(false);
+      return;
+    }
+    queueRequest.current?.abort();
+    const controller = new AbortController();
+    queueRequest.current = controller;
     const center = centerFilter ? `&center_code=${encodeURIComponent(centerFilter)}` : "";
     try {
-      const result = await getPagedRequests<QueueSummary>(`/api/workflow/queue?status=${tab}&page=${page}&page_size=${pageSize}${center}`);
+      const result = await getPagedRequests<QueueSummary>(`/api/workflow/queue?status=${tab}&page=${page}&page_size=${pageSize}&compact=1${center}`,
+        { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setRequests(result.data); setTotal(result.total);
       if (result.summary) setSummary(result.summary);
-    } catch (e) { console.error(e); }
-    finally { if (showLoading) setInitialLoading(false); }
+      queueCache.current.set(cacheKey, { at: Date.now(), page: result });
+    } catch (e) { if (!controller.signal.aborted) console.error(e); }
+    finally {
+      if (queueRequest.current === controller) {
+        queueRequest.current = null;
+        hasLoadedQueue.current = true;
+        setInitialLoading(false);
+      }
+    }
   }, [centerFilter, page, tab]);
   useEffect(() => {
     void refresh(true);
-    const timer = window.setInterval(() => void refresh(), 15_000);
-    return () => window.clearInterval(timer);
+    const refreshWhenVisible = () => { if (!document.hidden) void refresh(); };
+    const timer = window.setInterval(refreshWhenVisible, 30_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      queueRequest.current?.abort();
+    };
   }, [refresh]);
   useEffect(() => { void request<CenterOption[]>("/api/centers").then(setCenters).catch(console.error); }, []);
 
@@ -114,22 +137,36 @@ function HqAdminConsole() {
       });
   }, [requests, tab, typeFilter, priorityFilter, companyFilter, ageFilter, sortBy, query]);
 
-  const selected = requests.find((r) => r.id === selectedId) ?? filtered[0];
+  const selectedSummary = filtered.find((r) => r.id === selectedId) ?? filtered[0];
+  const selected = selectedDetail?.dbId === selectedSummary?.dbId
+    && selectedDetail.updatedAt === selectedSummary?.updatedAt ? selectedDetail : selectedSummary;
+
+  useEffect(() => {
+    if (!selectedSummary?.dbId) { setSelectedDetail(null); setDetailLoading(false); return; }
+    const requestId = selectedSummary.dbId;
+    const cached = detailCache.current.get(requestId);
+    if (cached?.updatedAt === selectedSummary.updatedAt) {
+      setSelectedDetail(cached.request);
+      setDetailLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSelectedDetail(null);
+    setDetailLoading(true);
+    void request<Record<string, unknown>>(`/api/workflow/requests/${requestId}`, { signal: controller.signal })
+      .then((row) => {
+        if (controller.signal.aborted) return;
+        const detail = toRequest(row);
+        detailCache.current.set(requestId, { updatedAt: selectedSummary.updatedAt, request: detail });
+        setSelectedDetail(detail);
+      })
+      .catch((cause) => { if (!controller.signal.aborted) setActionError(cause instanceof Error ? cause.message : "Request details unavailable"); })
+      .finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
+    return () => controller.abort();
+  }, [selectedSummary?.dbId, selectedSummary?.updatedAt]);
 
   const applyAction = useCallback(async (ids: string[], action: "approve" | "reject" | "queue" | "info", note: string) => {
-    setRequests((prev) => prev.map((r) => {
-      if (!ids.includes(r.id)) return r;
-      const at = new Date().toISOString();
-      const nextStatus: RequestStatus =
-        action === "approve" ? "approved" :
-        action === "reject" ? "rejected" :
-        action === "queue" ? "queued" : "info_requested";
-      const auditAction = action === "info" ? "info_requested" : action === "approve" ? "approved" : action === "reject" ? "rejected" : "queued";
-      return {
-        ...r, status: nextStatus, updatedAt: at,
-        audit: [...r.audit, { at, actor: actorTag(), action: auditAction, note: autoNote(action, note) }],
-      };
-    }));
+    queueCache.current.clear();
     setChecked(new Set());
     setPage(1);
     try {
@@ -140,9 +177,9 @@ function HqAdminConsole() {
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "HQ action failed");
     } finally {
-      await refresh();
+      if (page === 1) await refresh();
     }
-  }, [refresh, requests, actorTag, autoNote]);
+  }, [refresh, requests, page]);
 
   const onDetailAction = useCallback((id: string, action: "approve" | "reject" | "queue" | "info" | "verify" | "send_back", note: string) => {
     if (action === "verify" || action === "send_back") return;
@@ -295,7 +332,7 @@ function HqAdminConsole() {
         <div className="mx-4 mt-4 sm:mx-6"><MasterDetailLoadingSkeleton /></div>
       ) : (
         <>{actionError && <div className="mx-4 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 sm:mx-6">{actionError}</div>}<HqQueuePanel
-          filtered={filtered} selected={selected} checked={checked}
+          filtered={filtered} selected={selected} detailLoading={detailLoading} checked={checked}
           page={page} pageSize={pageSize} total={total} onPageChange={setPage}
           typeFilter={typeFilter} priorityFilter={priorityFilter} companyFilter={companyFilter} ageFilter={ageFilter}
           sortBy={sortBy} query={query}

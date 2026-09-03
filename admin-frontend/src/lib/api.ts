@@ -1,7 +1,12 @@
 import type { AuditEntry, RequestItem } from '@/components/models';
 
 const configuredBaseUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
-const baseUrl = configuredBaseUrl || (import.meta.env.DEV ? 'http://localhost:3001' : '');
+const localProductionBaseUrl = typeof window !== 'undefined'
+  && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ? 'http://localhost:3001'
+  : '';
+const baseUrl = configuredBaseUrl
+  || (import.meta.env.DEV ? 'http://localhost:3001' : localProductionBaseUrl);
 const tokenKey = 'requesthub.token';
 export type SessionUser = {
   id: number;
@@ -66,15 +71,19 @@ export const session = {
   }
 };
 
-export async function request<T>(path: string, init: { method?: string; body?: unknown } = {}, authenticate = true): Promise<T> {
+type ApiRequestInit = { method?: string; body?: unknown; signal?: AbortSignal };
+
+export async function request<T>(path: string, init: ApiRequestInit = {}, authenticate = true): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       method: init.method ?? 'GET', headers: { 'Content-Type': 'application/json', ...(authenticate && session.token ? { Authorization: `Bearer ${session.token}` } : {}) },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       credentials: 'include',
+      signal: init.signal,
     });
-  } catch {
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
     throw new Error('RequestHub server is unavailable. Please start the backend and try again.');
   }
   const data = await response.json().catch(() => ({}));
@@ -127,7 +136,7 @@ export function toRequest(row: Record<string, unknown>): RequestItem {
 
 export const getRequests = async (path: string) => (await request<Record<string, unknown>[]>(path)).map(toRequest);
 export interface Paged<T, S = unknown> { data: T[]; page: number; page_size: number; total: number; summary?: S; }
-export const getPagedRequests = async <S = unknown>(path: string) => {
-  const page = await request<Paged<Record<string, unknown>, S>>(path);
+export const getPagedRequests = async <S = unknown>(path: string, init: ApiRequestInit = {}) => {
+  const page = await request<Paged<Record<string, unknown>, S>>(path, init);
   return { ...page, data: page.data.map(toRequest) };
 };
