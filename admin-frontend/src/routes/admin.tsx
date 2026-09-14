@@ -138,7 +138,7 @@ function HqAdminConsole() {
   }, [requests, tab, typeFilter, priorityFilter, companyFilter, ageFilter, sortBy, query]);
 
   const selectedSummary = filtered.find((r) => r.id === selectedId) ?? filtered[0];
-  const selected = selectedDetail?.dbId === selectedSummary?.dbId
+  const selected = selectedDetail && selectedSummary && selectedDetail.dbId === selectedSummary.dbId
     && selectedDetail.updatedAt === selectedSummary?.updatedAt ? selectedDetail : selectedSummary;
 
   useEffect(() => {

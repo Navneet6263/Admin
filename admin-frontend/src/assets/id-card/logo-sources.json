@@ -1,0 +1,26 @@
+{
+  "purpose": "Higher-quality reproductions of logos already present in the user-supplied ID-card formats. Brand ownership and usage rights are unchanged.",
+  "iocl": {
+    "source": "https://commons.wikimedia.org/wiki/File:Indian_Oil_Logo.svg",
+    "asset": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Indian_Oil_Logo.svg",
+    "brand_reference": "https://iocl.com/corporate-logo",
+    "method": "Original vector paths; same short-name mark, no AI redraw"
+  },
+  "ioag": {
+    "source": "https://ioagpl.com/wp-content/uploads/2021/10/Annual-Report-2022-23.pdf",
+    "page": 1,
+    "method": "Vector emblem extracted from cover, report background excluded"
+  },
+  "bgcl": {
+    "source": "https://bgcl.co.in/pdf/BGCL_%20ANNUAL%20REPORT%202025.pdf",
+    "page": 4,
+    "method": "Vector emblem extracted from the white-background header"
+  },
+  "avantika": {
+    "source": "https://www.aglonline.net/wp-content/uploads/2024/08/Annual-Report_2023-24.pdf",
+    "page": 4,
+    "method": "Official white emblem paths used in the supplied green square lockup; company caption typeset as vector text"
+  },
+  "other_formats": "GreenCall, Talent Foundation and North Star artwork comes from the user-provided PDFs with native vector paths retained. Vision India already uses SVG. Original signatures and employee photographs are not artificially redrawn.",
+  "export": "2160-pixel-wide PDF rasterization; on-screen card artwork uses SVG"
+}

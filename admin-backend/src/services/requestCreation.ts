@@ -73,17 +73,24 @@ export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<
           IF @foodDate=CONVERT(DATE,@indiaNow) AND (CONVERT(TIME,@indiaNow)<'10:00' OR CONVERT(TIME,@indiaNow)>='20:00')
             THROW 51005,'Today food booking is available from 10:00 AM to 8:00 PM',1;
         END;
-        IF @type='id_card' AND (ISJSON(@details)<>1 OR JSON_VALUE(@details,'$.brand')<>'vision_india'
+        IF @type='id_card' AND (ISNULL(ISJSON(@details),0)<>1 OR ISNULL(JSON_VALUE(@details,'$.brand'),'') NOT IN
+          ('vision_india','green_call','talent_foundation','north_star_avantika','north_star_bgcl','north_star_ioag','north_star_iocl')
           OR NULLIF(JSON_VALUE(@details,'$.employeeCode'),'') IS NULL OR NOT EXISTS(
             SELECT 1 FROM OPENJSON(@details) WITH(photoDataUrl NVARCHAR(MAX) '$.photoDataUrl') WHERE NULLIF(photoDataUrl,'') IS NOT NULL))
-          THROW 51006,'Complete the Vision India ID-card preview before submitting',1;
+          THROW 51006,'Select a supported ID-card format and complete the preview before submitting',1;
         IF @type='id_card' BEGIN
           DECLARE @phone NVARCHAR(30)=JSON_VALUE(@details,'$.phone'),
             @emergencyPhone NVARCHAR(30)=JSON_VALUE(@details,'$.emergencyPhone');
-          IF LEN(ISNULL(@phone,''))<>10 OR @phone LIKE '%[^0-9]%' OR LEFT(@phone,1) NOT IN('6','7','8','9')
+          IF JSON_VALUE(@details,'$.brand')='vision_india' AND
+            (LEN(ISNULL(@phone,''))<>10 OR @phone LIKE '%[^0-9]%' OR LEFT(@phone,1) NOT IN('6','7','8','9'))
             THROW 51007,'Enter a valid 10-digit Indian contact number',1;
           IF LEN(ISNULL(@emergencyPhone,''))<>10 OR @emergencyPhone LIKE '%[^0-9]%' OR LEFT(@emergencyPhone,1) NOT IN('6','7','8','9')
             THROW 51008,'Enter a valid 10-digit Indian emergency number',1;
+          IF ISNULL(JSON_VALUE(@details,'$.bloodGroup'),'') NOT IN('A+','A-','B+','B-','AB+','AB-','O+','O-')
+            THROW 51006,'Select a valid blood group for the ID card',1;
+          IF JSON_VALUE(@details,'$.brand')<>'green_call' AND
+            NULLIF(LTRIM(RTRIM(JSON_VALUE(@details,'$.designation'))),'') IS NULL
+            THROW 51006,'Enter a designation for the selected ID-card format',1;
         END;
         DECLARE @payment NVARCHAR(30)=CASE WHEN @type IN
           ('stationery','travel','courier','fooding','meeting_room','visiting_card','id_card')

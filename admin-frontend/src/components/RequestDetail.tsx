@@ -7,8 +7,9 @@ import { Check, X, Send as SendIcon, MessageCircle, User2, Building2, Clock, Dow
 import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
 import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
 import type { BusinessCardDetails } from "./business-card/businessCardTemplates";
-import { VisionIndiaIdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
-import { downloadIdCardPdf } from "./id-card/idCardPdf";
+import { IdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
+import { IdCardDownloadButton } from "./id-card/IdCardDownloadButton";
+import { isIdCardBrand } from "./id-card/idCardTemplates";
 import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
 
 interface Props {
@@ -97,13 +98,10 @@ export function RequestDetail({ request, onAction, readOnly }: Props) {
           </section>
         )}
 
-        {request.type === "id_card" && request.details?.brand === "vision_india" && (
+        {request.type === "id_card" && isIdCardBrand(request.details?.brand) && (
           <section className="rounded-xl bg-slate-950 p-4">
-            <VisionIndiaIdCardPreview details={request.details as unknown as IdCardDetails} />
-            <button type="button" onClick={() => void downloadIdCardPdf(request.details as unknown as IdCardDetails)}
-              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100">
-              <Download className="h-3.5 w-3.5" /> Download print PDF
-            </button>
+            <IdCardPreview details={request.details as unknown as IdCardDetails} />
+            <div className="mt-3"><IdCardDownloadButton details={request.details as unknown as IdCardDetails} /></div>
           </section>
         )}
 

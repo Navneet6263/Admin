@@ -1,17 +1,16 @@
 // Specialized sub-forms for the New Request dialog.
 // Each form owns its own local UI + returns a `details` payload the admin can review.
 
-import { useState } from "react";
 import { Train, Plane, Car, Package, Utensils, Download, CheckCircle2, Clock3 } from "lucide-react";
 import { fmtINR } from "./requestMeta";
 import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
 import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
 import { businessCardTemplate, type BusinessCardBrand, type BusinessCardDetails } from "./business-card/businessCardTemplates";
-import { VisionIndiaIdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
-import { PhotoCropper } from "./id-card/PhotoCropper";
-import { downloadIdCardPdf } from "./id-card/idCardPdf";
-import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
-import { IndianMobileField, isValidIndianMobile } from "./id-card/IndianMobileField";
+import { ID_CARD_NAMES, idCardFields, isIdCardBrand } from "./id-card/idCardTemplates";
+import { ID_CARD_REASONS } from "./id-card/idCardFormState";
+export { IdCardForm } from "./id-card/IdCardForm";
+export { emptyIdCard, idCardDetails, idCardValid, summarizeIdCard } from "./id-card/idCardFormState";
+export type { IdCardState, RequesterProfile } from "./id-card/idCardFormState";
 
 /* ---------- shared field helpers ---------- */
 const inputCls =
@@ -98,134 +97,6 @@ export function VisitingCardForm({ value, onChange }: { value: VCState; onChange
 
 /* ---------- Travel — train / flight / taxi ---------- */
 /* ---------- ID card — profile-driven request ---------- */
-export interface IdCardState {
-  issueType: "new" | "lost" | "damaged" | "details_changed" | "expired";
-  reason: string;
-  designation: string;
-  phone: string;
-  bloodGroup: string;
-  emergencyPhone: string;
-  photoDataUrl: string;
-  confirmed: boolean;
-}
-export interface RequesterProfile {
-  id?: number;
-  name: string;
-  email: string;
-  company: string;
-  dept: string;
-  employee_code?: string | null;
-  center_code?: string | null;
-}
-export const emptyIdCard = (): IdCardState => ({ issueType: "new", reason: "", designation: "", phone: "",
-  bloodGroup: "", emergencyPhone: "", photoDataUrl: "", confirmed: false });
-export const idCardDetails = (value: IdCardState, profile?: RequesterProfile): IdCardDetails => ({
-  brand: "vision_india", name: profile?.name || "Authenticated employee",
-  employeeCode: profile?.employee_code || (profile?.id ? `EMP-${String(profile.id).padStart(4, "0")}` : "EMP-PENDING"),
-  designation: value.designation.trim() || profile?.dept || "—", department: profile?.dept || "—",
-  phone: value.phone, bloodGroup: value.bloodGroup, emergencyPhone: value.emergencyPhone, photoDataUrl: value.photoDataUrl,
-});
-const idCardReady = (value: IdCardState, profile?: RequesterProfile) => Boolean(value.photoDataUrl &&
-  isValidIndianMobile(value.phone) && isValidIndianMobile(value.emergencyPhone) &&
-  value.bloodGroup && (value.designation.trim() || profile?.dept));
-export const idCardValid = (value: IdCardState, profile?: RequesterProfile) =>
-  value.reason.trim().length >= 5 && idCardReady(value, profile) && value.confirmed;
-
-const readIdPhoto = (file: File) => new Promise<string>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onerror = () => reject(new Error("Photo could not be read"));
-  reader.onload = () => resolve(String(reader.result));
-  reader.readAsDataURL(file);
-});
-
-const ID_CARD_REASONS: Array<{ id: IdCardState["issueType"]; label: string; hint: string }> = [
-  { id: "new", label: "New / first card", hint: "New joining or first ID card" },
-  { id: "lost", label: "Lost card", hint: "Card was lost and needs replacement" },
-  { id: "damaged", label: "Damaged card", hint: "Card is broken or unreadable" },
-  { id: "details_changed", label: "Details changed", hint: "Name, role or office details changed" },
-  { id: "expired", label: "Expired card", hint: "Renew an expired ID card" },
-];
-
-export function IdCardForm({ value, onChange, profile }: { value: IdCardState; onChange: (value: IdCardState) => void; profile?: RequesterProfile }) {
-  const [cropSource, setCropSource] = useState("");
-  const details = idCardDetails(value, profile);
-  const set = <K extends keyof IdCardState>(key: K, next: IdCardState[K]) => onChange({ ...value, [key]: next });
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3.5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Employee profile · automatic</p>
-        <p className="mt-1 text-sm font-semibold text-white">{profile?.name || "Authenticated employee"}</p>
-        <p className="mt-1 text-xs text-slate-300">{profile?.company || "Company from profile"} · {profile?.dept || "Department"}</p>
-        <p className="mt-0.5 text-[10px] text-slate-400">{profile?.email || "Work email"} · Center {profile?.center_code || "Unassigned"}</p>
-        {profile?.company && profile.company.trim().toLowerCase() !== "vision india" && <p className="mt-2 text-[10px] font-semibold text-indigo-200">Selected ID-card template: Vision India · additional company templates can be added next.</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <TextField label="Designation" value={value.designation} onChange={(next) => set("designation", next)} placeholder={profile?.dept || "Designation"} />
-        <IndianMobileField label="Contact number" value={value.phone} onChange={(next) => set("phone", next)} />
-        <SelectField label="Blood group" value={value.bloodGroup} onChange={(next) => set("bloodGroup", next)} options={["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]} />
-        <IndianMobileField label="Emergency number" value={value.emergencyPhone} onChange={(next) => set("emergencyPhone", next)} />
-      </div>
-
-      <div className="rounded-xl border border-white/15 bg-white/5 p-3">
-        <div className="flex items-center gap-3">
-          <div className="h-16 w-14 overflow-hidden rounded-lg border border-white/20 bg-slate-100">
-            {value.photoDataUrl ? <img src={value.photoDataUrl} alt="ID preview" className="h-full w-full object-contain" /> : <span className="grid h-full place-items-center text-[9px] text-slate-400">PHOTO</span>}
-          </div>
-          <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-white">Employee photograph *</p><p className="mt-0.5 text-[10px] text-slate-400">Upload a clear front-facing passport photo.</p></div>
-          <label className="cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-semibold text-white hover:bg-white/15">
-            {value.photoDataUrl ? "Change" : "Upload"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only"
-              onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = "";
-                if (file) void readIdPhoto(file).then(setCropSource); }} />
-          </label>
-        </div>
-      </div>
-      {cropSource && <PhotoCropper source={cropSource} onCancel={() => setCropSource("")}
-        onApply={(photo) => { set("photoDataUrl", photo); setCropSource(""); }} />}
-
-      <div className="rounded-xl border border-white/10 bg-slate-950/35 p-3">
-        <VisionIndiaIdCardPreview details={details} />
-        <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
-          <button type="button" disabled={!idCardReady(value, profile)} onClick={() => void downloadIdCardPdf(details)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">
-            <Download className="h-3.5 w-3.5" /> Download PDF preview
-          </button>
-          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-            <input type="checkbox" checked={value.confirmed} onChange={(event) => set("confirmed", event.target.checked)} className="h-4 w-4 accent-indigo-500" />
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Details verified
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Why do you need an ID card?</label>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {ID_CARD_REASONS.map((reason) => (
-            <button key={reason.id} type="button" onClick={() => onChange({ ...value, issueType: reason.id })}
-              className={`rounded-xl border p-3 text-left transition-colors ${value.issueType === reason.id ? "border-indigo-300 bg-indigo-400/20 text-white ring-2 ring-indigo-300/20" : "border-white/15 bg-slate-900/30 text-slate-300 hover:bg-slate-800/60"}`}>
-              <span className="block text-xs font-semibold">{reason.label}</span>
-              <span className="mt-0.5 block text-[10px] text-slate-400">{reason.hint}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Reason / explanation *</label>
-        <textarea value={value.reason} onChange={(event) => set("reason", event.target.value)} rows={4}
-          placeholder={value.issueType === "lost" ? "Where and how was the card lost?" : "Briefly explain why a new ID card is required…"}
-          className={inputCls} maxLength={500} />
-        <p className="mt-1 text-[10px] text-slate-400">Name, company, department and center will be taken from your employee profile.</p>
-      </div>
-    </div>
-  );
-}
-
-export function summarizeIdCard(value: IdCardState) {
-  const label = ID_CARD_REASONS.find((reason) => reason.id === value.issueType)?.label || "ID card";
-  return { subject: `Vision India ID Card — ${label}`, description: value.reason.trim() };
-}
-
 export type TravelMode = "train" | "flight" | "taxi";
 export interface Pax { name: string; age: string; gender: "Male" | "Female" | "Other"; }
 export interface TravelState {
@@ -586,18 +457,21 @@ export function detailRows(type: string, details: Record<string, unknown> | unde
   const d = details as Record<string, string | number | boolean | undefined | unknown>;
   const s = (v: unknown) => (v === undefined || v === null || v === "") ? "—" : String(v);
   switch (type) {
-    case "id_card":
+    case "id_card": {
+      const fields = isIdCardBrand(d.brand) ? idCardFields(d.brand) : null;
       return [
+        { label: "Card format", value: isIdCardBrand(d.brand) ? ID_CARD_NAMES[d.brand] : s(d.brand) },
         { label: "Issue type", value: s(ID_CARD_REASONS.find((reason) => reason.id === d.issueType)?.label ?? d.issueType) },
         { label: "Reason", value: s(d.reason) },
         { label: "Employee code", value: s(d.employeeCode) },
-        { label: "Designation", value: s(d.designation) },
-        { label: "Department", value: s(d.department) },
-        { label: "Contact", value: s(d.phone) },
+        ...(!fields || fields.designation ? [{ label: "Designation", value: s(d.designation) }] : []),
+        ...(!fields || fields.department ? [{ label: "Department", value: s(d.department) }] : []),
+        ...(!fields || fields.phone ? [{ label: "Contact", value: s(d.phone) }] : []),
         { label: "Blood group", value: s(d.bloodGroup) },
         { label: "Emergency no.", value: s(d.emergencyPhone) },
         { label: "Company / center", value: `${s(d.profileCompany)} · ${s(d.profileCenter)}` },
       ];
+    }
     case "visiting_card":
       return [
         { label: "Company template", value: s(d.brand ? businessCardTemplate(d.brand as BusinessCardBrand).name : d.template) },

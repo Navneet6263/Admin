@@ -1,4 +1,5 @@
-export type IdCardTemplateBrand = "vision_india";
+import type { IdCardTemplateBrand } from "./idCardTemplates";
+export type { IdCardTemplateBrand } from "./idCardTemplates";
 export type IdCardSide = "front" | "back";
 
 export interface IdCardDetails {
