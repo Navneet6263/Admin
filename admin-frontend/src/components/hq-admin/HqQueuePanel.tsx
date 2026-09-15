@@ -7,6 +7,7 @@ import type { RequestItem, RequestType, Priority } from "@/components/models";
 import { PaginationBar } from "@/components/PaginationBar";
 import { PanelLoadingSkeleton } from "@/components/LoadingSkeletons";
 import { AlertTriangle, CheckCircle2, PackageCheck } from "lucide-react";
+import { VendorDispatchButton } from "../vendors/VendorDispatchButton";
 
 interface Props {
   filtered: RequestItem[];
@@ -53,6 +54,7 @@ export function HqQueuePanel({
     <div className="mx-4 sm:mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-4 h-[calc(100vh-16rem)] min-h-[600px]">
       <div className="bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-100 flex flex-wrap items-center gap-2">
+          <VendorDispatchButton />
           <input
             type="checkbox"
             checked={actionable.length > 0 && checked.size === actionable.length}

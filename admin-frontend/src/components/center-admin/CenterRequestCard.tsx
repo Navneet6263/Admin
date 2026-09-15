@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Clock3, PackageCheck, XCircle } from 'lucide-react';
 import { useState } from 'react';
+import { VendorDispatchButton } from '../vendors/VendorDispatchButton';
 
 export interface CenterRequest {
   id: number;
@@ -77,6 +78,8 @@ export function CenterRequestCard({ req, onApprove, onReject, onAssign, onResolv
   };
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/30 transition hover:border-slate-300 hover:shadow-md">
+      {req.status === 'approved' && ['id_card', 'visiting_card'].includes(req.type)
+        && <div className="mb-3"><VendorDispatchButton requestId={req.id} /></div>}
       <div className="flex items-start gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><Clock3 className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">

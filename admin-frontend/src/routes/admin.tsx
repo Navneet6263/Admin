@@ -10,6 +10,7 @@ import { HqAnalyticsPanel } from "@/components/hq-admin/HqAnalyticsPanel";
 import { ExpenseAnalytics } from "@/components/analytics/ExpenseAnalytics";
 import { CenterCombobox, type CenterOption } from "@/components/CenterCombobox";
 import { TeamTab } from "@/components/super-admin/TeamTab";
+import { VendorApprovalNotice } from "@/components/vendors/VendorApprovalNotice";
 import { getPagedRequests, request, toRequest } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2 } from "lucide-react";
@@ -31,6 +32,7 @@ type QueueSummary = Record<Tab, number>;
 type QueuePage = { data: RequestItem[]; total: number; summary?: QueueSummary };
 
 function HqAdminConsole() {
+  const [vendorApproved, setVendorApproved] = useState<number[]>([]);
   const sessionUser = useSessionUser();
 
   const currentAdmin = useMemo(() => ({
@@ -174,6 +176,8 @@ function HqAdminConsole() {
       await Promise.all(ids.map((id) =>
         request(`/api/workflow/requests/${requests.find((r) => r.id === id)?.dbId}/${action}`, { method: "POST", body: { remarks: note } }),
       ));
+      if (action === 'approve') setVendorApproved(requests.filter(r => ids.includes(r.id)
+        && r.dbId && ['id_card', 'visiting_card'].includes(r.type)).map(r => r.dbId!));
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "HQ action failed");
     } finally {
@@ -331,7 +335,8 @@ function HqAdminConsole() {
       ) : initialLoading ? (
         <div className="mx-4 mt-4 sm:mx-6"><MasterDetailLoadingSkeleton /></div>
       ) : (
-        <>{actionError && <div className="mx-4 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 sm:mx-6">{actionError}</div>}<HqQueuePanel
+        <><VendorApprovalNotice key={vendorApproved.join(',')} ids={vendorApproved} dismiss={() => setVendorApproved([])} />
+        {actionError && <div className="mx-4 mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700 sm:mx-6">{actionError}</div>}<HqQueuePanel
           filtered={filtered} selected={selected} detailLoading={detailLoading} checked={checked}
           page={page} pageSize={pageSize} total={total} onPageChange={setPage}
           typeFilter={typeFilter} priorityFilter={priorityFilter} companyFilter={companyFilter} ageFilter={ageFilter}

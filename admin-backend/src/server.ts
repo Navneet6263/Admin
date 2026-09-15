@@ -25,6 +25,9 @@ import centerAccessRoutes from './routes/centerAccess';
 import financeInsightsRoutes from './routes/financeInsights';
 import { createPaymentReminders } from './services/notifications';
 import { corsOptions, enforceTrustedOrigin } from './security';
+import vendorRoutes from './routes/vendors';
+import vendorCardRoutes from './routes/vendorCards';
+import { vendorSendRateLimit } from './services/vendorRateLimit';
 
 const app = express();
 
@@ -32,6 +35,9 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors(corsOptions));
+// Authenticate before accepting the larger PDF payload. Other APIs retain 1 MB.
+app.use('/api/vendor-cards/send', requireAuth('center_admin','hq_admin','super_admin'), enforceTrustedOrigin, vendorSendRateLimit,
+  express.json({ limit: '12mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -48,6 +54,8 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/vendors', requireAuth('center_admin','hq_admin','super_admin'), vendorRoutes);
+app.use('/api/vendor-cards', requireAuth('center_admin','hq_admin','super_admin'), vendorCardRoutes);
 app.use('/api/teams',          requireAuth(), teamsRoutes);
 app.use('/api/companies',      requireAuth(), companiesRoutes);
 app.use('/api/centers',        requireAuth(), centersRoutes);

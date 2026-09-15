@@ -5,6 +5,7 @@ import { useCompanies } from "@/lib/directory";
 import { type RequestItem, type RequestStatus } from "@/components/models";
 import { PaginationBar } from "@/components/PaginationBar";
 import { useEffect, useMemo, useState } from "react";
+import { VendorDispatchButton } from "../vendors/VendorDispatchButton";
 
 interface Props {
   list: RequestItem[];
@@ -46,6 +47,7 @@ export function OverrideTab({
         {/* Left — request list */}
         <div className="bg-white border border-slate-200 rounded-lg flex flex-col overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 flex-wrap">
+            <VendorDispatchButton />
             <select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
               className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-slate-300">
               <option value="all">All companies</option>

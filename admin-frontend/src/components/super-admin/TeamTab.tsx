@@ -4,6 +4,8 @@ import type { CenterOption } from "@/components/CenterCombobox";
 import { DirectorySetupPanel } from "./DirectorySetupPanel";
 import { SmartUserForm } from "./SmartUserForm";
 import { TeamRoster, type UserRow } from "./TeamRoster";
+import { VendorManager } from "../vendors/VendorManager";
+import { VendorDispatchButton } from "../vendors/VendorDispatchButton";
 
 interface Props {
   mode?: "super" | "hq";
@@ -23,6 +25,7 @@ export function TeamTab({ mode = "super", searchQuery = "" }: Props) {
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [assignmentError, setAssignmentError] = useState("");
+  const [showVendors, setShowVendors] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +84,12 @@ export function TeamTab({ mode = "super", searchQuery = "" }: Props) {
 
   return (
     <div className="space-y-4 pt-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setShowVendors(!showVendors)} aria-expanded={showVendors}
+          className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-slate-800">{showVendors ? 'Hide vendors' : 'Create & manage vendors'}</button>
+        <VendorDispatchButton />
+      </div>
+      {showVendors && <VendorManager />}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.45fr)]">
         <DirectorySetupPanel
           companies={companies}

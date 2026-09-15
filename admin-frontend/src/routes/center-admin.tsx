@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, LayoutDashboard, Package, PackageCheck, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { VendorDispatchButton } from '@/components/vendors/VendorDispatchButton';
+import { VendorApprovalNotice } from '@/components/vendors/VendorApprovalNotice';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { CenterInventoryTable } from '@/components/center-admin/CenterInventoryTable';
 import { CenterOverview } from '@/components/center-admin/CenterOverview';
@@ -26,6 +28,7 @@ export const Route = createFileRoute('/center-admin')({
 });
 
 function CenterAdminDashboard() {
+  const [vendorApproved, setVendorApproved] = useState<number[]>([]);
   const user = useSessionUser();
   const [tab, setTab] = useState<Tab>('overview');
   const [filter, setFilter] = useState<QueueFilter>('awaiting_approval');
@@ -91,6 +94,7 @@ function CenterAdminDashboard() {
     try {
       const remarks = action === 'assign' ? 'Item handed over to employee' : '';
       await request(`/api/workflow/requests/${id}/${action}`, { method: 'POST', body: { remarks } });
+      if (action === 'approve' && requests.some(r => r.id === id && ['id_card', 'visiting_card'].includes(r.type))) setVendorApproved([id]);
       if (page === 1) await refresh(); else setPage(1);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : `Request could not be ${action}d`;
@@ -147,10 +151,12 @@ function CenterAdminDashboard() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh data</button>
           </div>
         </div>
+        <VendorApprovalNotice key={vendorApproved.join(',')} ids={vendorApproved} dismiss={() => setVendorApproved([])} />
         {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</div>}
         {loading && !overview ? <PanelLoadingSkeleton /> : <>
           {tab === 'overview' && overview && <CenterOverview data={overview} activity={activity} />}
           {tab === 'approvals' && <section>
+            <div className="mb-3"><VendorDispatchButton /></div>
             <div className="mb-4 flex flex-wrap gap-2">{([['awaiting_approval','Needs action'],['ready_to_assign','Ready to assign'],['delivery_issues','Delivery issues'],['approved','Approved'],['rejected','Rejected'],['withdrawn','Withdrawn'],['all','All history']] as const).map(([value,label]) =>
               <button key={value} type="button" onClick={() => { setFilter(value); setPage(1); }} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${filter === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>{label}</button>)}</div>
             {queueLoading ? <PanelLoadingSkeleton /> : <><div className="grid gap-3 lg:grid-cols-2">{visible.map((row) => <CenterRequestCard key={row.id} req={row} onApprove={(id) => act(id,'approve')} onReject={(id) => act(id,'reject')} onAssign={(id) => act(id,'assign')} onResolve={resolveIssue} />)}</div>

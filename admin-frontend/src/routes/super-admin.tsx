@@ -19,6 +19,7 @@ import { OverrideTab } from "@/components/super-admin/OverrideTab";
 import { AnomaliesTab } from "@/components/super-admin/AnomaliesTab";
 import { InventoryTab } from "@/components/super-admin/InventoryTab";
 import { TeamTab } from "@/components/super-admin/TeamTab";
+import { VendorApprovalNotice } from "@/components/vendors/VendorApprovalNotice";
 import { CentersAssignmentPanel } from "@/components/super-admin/CentersPanel";
 import { PolicyTab } from "@/components/super-admin/PolicyTab";
 import { protectedRoute } from "@/components/ProtectedRoute";
@@ -35,6 +36,7 @@ export const Route = createFileRoute("/super-admin")({
 });
 
 function SuperAdmin() {
+  const [vendorApproved, setVendorApproved] = useState<number[]>([]);
   const sessionUser = useSessionUser();
   const [authenticated, setAuthenticated] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
@@ -136,6 +138,7 @@ function SuperAdmin() {
       try {
         setActionError("");
         await request(`/api/super-admin/requests/${target.dbId}/override`, { method: 'POST', body: { next_status: next, note } });
+        if (next === 'approved' && ['id_card', 'visiting_card'].includes(target.type)) setVendorApproved([target.dbId]);
       } catch (cause) {
         setActionError(cause instanceof Error ? cause.message : "Workflow action failed");
       } finally { await refresh(); }
@@ -238,6 +241,7 @@ function SuperAdmin() {
       </div>
 
       <div className="px-4 sm:px-6 pb-10">
+        <VendorApprovalNotice key={vendorApproved.join(',')} ids={vendorApproved} dismiss={() => setVendorApproved([])} />
         {actionError && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{actionError}</div>}
         {initialLoading && ["overview", "analytics", "override", "anomalies"].includes(tab) && <PanelLoadingSkeleton />}
         {!initialLoading && tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}

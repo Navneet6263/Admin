@@ -30,7 +30,7 @@ async function load(side: IdCardSide, details: IdCardDetails, urls: string[]) {
   });
 }
 
-export async function downloadIdCardPdf(details: IdCardDetails) {
+export async function createIdCardPrint(details: IdCardDetails) {
   const urls: string[] = [];
   try {
     const results = await Promise.allSettled((["front", "back"] as const).map((side) => load(side, details, urls)));
@@ -51,11 +51,19 @@ export async function downloadIdCardPdf(details: IdCardDetails) {
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value)
       : reject(new Error("ID-card PDF could not be generated")), "image/jpeg", .97));
     const sheet = { bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height };
-    const url = URL.createObjectURL(new Blob([makePdf([sheet])], { type: "application/pdf" }));
-    const link = document.createElement("a"); link.href = url;
-    link.download = `${details.brand}-id-${details.employeeCode || details.name}`.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() + ".pdf";
-    link.click(); setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    return { pdf: new Blob([makePdf([sheet])], { type: "application/pdf" }), images: [blob] };
   } finally {
     urls.forEach((url) => URL.revokeObjectURL(url));
   }
+}
+
+export async function createIdCardPdf(details: IdCardDetails) {
+  return (await createIdCardPrint(details)).pdf;
+}
+
+export async function downloadIdCardPdf(details: IdCardDetails) {
+  const url = URL.createObjectURL(await createIdCardPdf(details));
+  const link = document.createElement("a"); link.href = url;
+  link.download = `${details.brand}-id-${details.employeeCode || details.name}`.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() + ".pdf";
+  link.click(); setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }

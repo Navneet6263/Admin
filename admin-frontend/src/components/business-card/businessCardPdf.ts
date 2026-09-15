@@ -82,11 +82,21 @@ export function makePdf(images: Array<{ bytes: Uint8Array; width: number; height
   return join(chunks);
 }
 
-export async function downloadBusinessCardPdf(details: BusinessCardDetails) {
+export async function createBusinessCardPrint(details: BusinessCardDetails) {
   const template = businessCardTemplate(details.brand);
   const sides = await Promise.all(template.sides.map(async (side) =>
     renderSide(await loadImage(side.image || template.image), side, details)));
-  const url = URL.createObjectURL(new Blob([makePdf(sides)], { type: "application/pdf" }));
+  return { pdf: new Blob([makePdf(sides)], { type: "application/pdf" }),
+    images: sides.map(side => new Blob([side.bytes], { type: 'image/jpeg' })) };
+}
+
+export async function createBusinessCardPdf(details: BusinessCardDetails) {
+  return (await createBusinessCardPrint(details)).pdf;
+}
+
+export async function downloadBusinessCardPdf(details: BusinessCardDetails) {
+  const template = businessCardTemplate(details.brand);
+  const url = URL.createObjectURL(await createBusinessCardPdf(details));
   const link = document.createElement("a");
   link.href = url;
   link.download = `${template.name}-${details.name || "business-card"}`.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() + ".pdf";

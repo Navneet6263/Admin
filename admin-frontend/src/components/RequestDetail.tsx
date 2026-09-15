@@ -11,6 +11,7 @@ import { IdCardPreview } from "./id-card/VisionIndiaIdCardPreview";
 import { IdCardDownloadButton } from "./id-card/IdCardDownloadButton";
 import { isIdCardBrand } from "./id-card/idCardTemplates";
 import type { IdCardDetails } from "./id-card/visionIndiaIdCard";
+import { VendorDispatchButton } from "./vendors/VendorDispatchButton";
 
 interface Props {
   request: RequestItem;
@@ -81,6 +82,8 @@ export function RequestDetail({ request, onAction, readOnly }: Props) {
 
       {/* body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        {request.status === 'approved' && request.dbId && ['id_card', 'visiting_card'].includes(request.type)
+          && <VendorDispatchButton requestId={request.dbId} />}
         <section className="grid grid-cols-2 gap-4">
           <MetaField icon={User2} label="Requester" value={request.employeeName} sub={`EMP-${request.employeeId.toString().padStart(4, "0")}`} />
           <MetaField icon={Building2} label="Department" value={request.employeeDept} />

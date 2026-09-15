@@ -1,6 +1,7 @@
 import mssql from 'mssql';
 import dotenv from 'dotenv';
 import { ensureWorkflowSchema } from './migrations/workflow';
+import { ensureVendorSchema } from './migrations/vendors';
 
 dotenv.config();
 
@@ -143,6 +144,7 @@ async function runMigrations() {
     `);
 
     await ensureWorkflowSchema(pool);
+    await ensureVendorSchema(pool);
     clearCache();
 
     console.log('✅ Migrations applied');
