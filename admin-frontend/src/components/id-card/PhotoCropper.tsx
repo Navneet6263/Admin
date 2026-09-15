@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Crop, X } from "lucide-react";
 
 const VIEW_W = 264;
@@ -42,7 +43,7 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
       size.width * scaleX, size.height * scaleY);
     onApply(canvas.toDataURL("image/jpeg", .88));
   };
-  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/80 p-2 backdrop-blur-md sm:p-4">
+  return createPortal(<div className="fixed inset-0 z-[90] grid place-items-center bg-black/80 p-2 backdrop-blur-md sm:p-4">
     <div className="request-scrollbar max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-slate-950 p-4 shadow-2xl sm:p-5">
       <div className="mb-3 flex items-start justify-between"><div><p className="flex items-center gap-2 text-sm font-bold text-white"><Crop className="h-4 w-4" /> Crop employee photo</p>
         <p className="mt-1 text-xs text-slate-400">The full photo is fitted automatically. Zoom only if needed, then drag to reposition.</p></div>
@@ -67,5 +68,5 @@ export function PhotoCropper({ source, onApply, onCancel }: { source: string; on
       <div className="sticky bottom-0 -mx-4 -mb-4 mt-3 flex gap-2 border-t border-white/10 bg-slate-950/95 p-4 backdrop-blur sm:-mx-5 sm:-mb-5 sm:p-5"><button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-white/15 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/10">Cancel</button>
         <button type="button" onClick={apply} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"><Check className="h-4 w-4" /> Use this crop</button></div>
     </div>
-  </div>;
+  </div>, document.body);
 }

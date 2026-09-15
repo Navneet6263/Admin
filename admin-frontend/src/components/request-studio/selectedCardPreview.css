@@ -1,0 +1,23 @@
+.selected-card-preview{width:100%;max-width:540px;min-width:0;flex-shrink:0;margin:auto}
+.selected-card-preview--id_card{max-width:min(100%,calc((100dvh - 240px)*1.08))}
+.selected-card-preview--visiting_card{max-width:min(100%,calc((100dvh - 260px)*.6))}
+.selected-card-preview-note{font-size:12px;line-height:1.6;text-align:center;color:#b4c6d8;margin:18px 0 0}
+.selected-card-preview svg{width:100%;height:auto;display:block}
+.selected-card-mobile{display:none}
+.id-single-form{display:flex;flex-direction:column;gap:12px}
+.id-single-form>*{margin-block:0!important}
+.id-single-form .card-profile-summary{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding-bottom:10px}
+.id-single-form .card-profile-summary>p{margin:0}
+.id-single-form .card-profile-summary>p:first-child{flex-basis:100%}
+.id-single-form .card-profile-summary>p:last-child{display:none}
+.id-single-form .id-form-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px}
+.id-single-form .id-form-details>.grid{display:contents}
+.id-single-form .id-form-details :is(label,span.block){font-size:12px;letter-spacing:0;text-transform:none}
+.id-single-form .id-form-details :is(input,select){font-size:14px;min-height:42px}
+.id-single-form .card-form-grid{gap:12px 16px}
+.id-single-form .card-form-grid>label{font-size:12px}
+.id-single-form .card-form-grid :is(select,textarea){font-size:14px;margin-top:6px;padding:9px 12px;min-height:42px}
+.id-single-form .card-form-grid textarea{resize:vertical}
+.id-single-form .card-review>div{margin-top:0;padding-top:10px}
+@media(max-width:1100px){.selected-card-mobile{display:block;border-top:1px solid #ffffff20;padding-top:20px}.selected-card-mobile .selected-card-preview{max-width:480px}.selected-card-mobile .selected-card-preview--visiting_card{max-width:360px}}
+@media(max-width:600px){.id-single-form .id-form-details{grid-template-columns:repeat(2,minmax(0,1fr))}.id-single-form .id-form-details>label{grid-column:1/-1}.id-single-form .card-form-grid{grid-template-columns:1fr}.id-single-form .id-form-details :is(input,select){font-size:16px}.selected-card-mobile .selected-card-preview-note{font-size:11px}}

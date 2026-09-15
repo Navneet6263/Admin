@@ -1,0 +1,9 @@
+/* Desktop-only density. Browser zoom and the surrounding dashboard stay unchanged.
+   Compensate the fixed shell's viewport size so scaling cannot crop its footer. */
+@media (min-width:1101px) {
+  .request-studio{zoom:.8;width:min(125vw,1600px);height:125dvh;bottom:auto}
+  .request-studio .request-card-gallery--id{width:min(100%,calc((125dvh - 250px)/1.6))}
+  .request-studio .request-card-gallery--visiting{width:min(100%,calc((125dvh - 250px)*.60))}
+  .request-studio .selected-card-preview--id_card{max-width:min(100%,calc((125dvh - 240px)*1.08))}
+  .request-studio .selected-card-preview--visiting_card{max-width:min(100%,calc((125dvh - 260px)*.6))}
+}

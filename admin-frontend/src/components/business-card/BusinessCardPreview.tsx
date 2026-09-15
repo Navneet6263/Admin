@@ -12,13 +12,13 @@ export function BusinessCardPreview({ details }: { details: BusinessCardDetails 
         <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-[9px] font-semibold text-emerald-300">Official · Locked</span>
       </div>
       <div className="grid grid-cols-1 gap-3">
-        {template.sides.map((side) => <Card key={side.id} side={side} details={details} image={side.image || template.image} sourceWidth={template.sourceWidth} sourceHeight={template.sourceHeight} />)}
+        {template.sides.map((side) => <BusinessCardFace key={side.id} side={side} details={details} image={side.image || template.image} sourceWidth={template.sourceWidth} sourceHeight={template.sourceHeight} />)}
       </div>
     </div>
   );
 }
 
-function Card({ side, details, image, sourceWidth, sourceHeight }: { side: CardSide; details: BusinessCardDetails; image: string; sourceWidth: number; sourceHeight: number }) {
+export function BusinessCardFace({ side, details, image, sourceWidth, sourceHeight }: { side: CardSide; details: BusinessCardDetails; image: string; sourceWidth: number; sourceHeight: number }) {
   return (
     <div>
       <p className="mb-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">{side.label}</p>

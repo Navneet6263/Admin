@@ -1,11 +1,12 @@
 // Specialized sub-forms for the New Request dialog.
 // Each form owns its own local UI + returns a `details` payload the admin can review.
 
-import { Train, Plane, Car, Package, Utensils, Download, CheckCircle2, Clock3 } from "lucide-react";
+import { Train, Plane, Car, Package, Utensils, Clock3 } from "lucide-react";
 import { fmtINR } from "./requestMeta";
-import { BusinessCardPreview } from "./business-card/BusinessCardPreview";
-import { downloadBusinessCardPdf } from "./business-card/businessCardPdf";
-import { businessCardTemplate, type BusinessCardBrand, type BusinessCardDetails } from "./business-card/businessCardTemplates";
+import { businessCardTemplate, type BusinessCardBrand } from "./business-card/businessCardTemplates";
+import type { VCState } from "./business-card/VisitingCardForm";
+export { VisitingCardForm, emptyVC, vcValid } from "./business-card/VisitingCardForm";
+export type { VCState } from "./business-card/VisitingCardForm";
 import { ID_CARD_NAMES, idCardFields, isIdCardBrand } from "./id-card/idCardTemplates";
 import { ID_CARD_REASONS } from "./id-card/idCardFormState";
 export { IdCardForm } from "./id-card/IdCardForm";
@@ -38,59 +39,6 @@ export function SelectField({
       <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
-    </div>
-  );
-}
-
-/* ---------- Visiting card — templates + live preview ---------- */
-export type VCState = BusinessCardDetails;
-export const emptyVC = (): VCState => ({ brand: "vision_india", name: "", designation: "", phone: "", email: "", address: "", qty: 100, confirmed: false });
-export const vcValid = (v: VCState) => v.name.trim().length > 1 && v.designation.trim().length > 1 && v.phone.trim().length >= 7 && v.email.includes("@") && Boolean(v.confirmed);
-
-export function VisitingCardForm({ value, onChange }: { value: VCState; onChange: (v: VCState) => void }) {
-  const set = <K extends keyof VCState>(key: K, next: VCState[K]) => onChange({ ...value, [key]: next });
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-indigo-400/25 bg-indigo-500/10 p-3.5">
-        <label className={labelCls}>Which company card do you need?</label>
-        <div className="grid grid-cols-2 gap-2">
-          {(["vision_india", "talent_foundation", "green_call", "green_hr"] as BusinessCardBrand[]).map((brand) => (
-            <button key={brand} type="button" onClick={() => set("brand", brand)}
-              className={`rounded-xl border px-3 py-3 text-left transition-colors ${value.brand === brand ? "border-indigo-300 bg-indigo-400/20 text-white ring-2 ring-indigo-300/20" : "border-white/15 bg-slate-900/30 text-slate-300 hover:bg-slate-800/60"}`}>
-              <span className="block text-[9px] font-bold uppercase tracking-widest text-slate-400">Official template</span>
-              <span className="mt-1 block text-sm font-semibold">{businessCardTemplate(brand).name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <TextField label="Full name" value={value.name} onChange={(next) => set("name", next)} placeholder="e.g. Priya Sharma" />
-        <TextField label="Designation" value={value.designation} onChange={(next) => set("designation", next)} placeholder="Senior Account Executive" />
-        <TextField label="Phone" value={value.phone} onChange={(next) => set("phone", next)} placeholder="+91 98xxxxxx" />
-        <TextField label="Email" type="email" value={value.email} onChange={(next) => set("email", next)} placeholder="priya@company.com" />
-        <div className="col-span-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-slate-400">Company address and branding are locked in the selected official template.</div>
-        <div>
-          <label className={labelCls}>Quantity</label>
-          <select value={value.qty} onChange={(event) => set("qty", Number(event.target.value))} className={inputCls}>
-            {[100, 250, 500, 1000].map((quantity) => <option key={quantity} value={quantity}>{quantity} cards</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-white/10 bg-slate-900/35 p-4">
-        <BusinessCardPreview details={value} />
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
-          <button type="button" onClick={() => void downloadBusinessCardPdf(value)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">
-            <Download className="h-3.5 w-3.5" /> Download PDF preview
-          </button>
-          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-            <input type="checkbox" checked={Boolean(value.confirmed)} onChange={(event) => set("confirmed", event.target.checked)} className="h-4 w-4 accent-indigo-500" />
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> I verified all card details
-          </label>
-        </div>
-      </div>
     </div>
   );
 }
