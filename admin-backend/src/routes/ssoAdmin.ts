@@ -13,7 +13,7 @@ router.get('/', async (_req, res) => {
         (SELECT COUNT(*) FROM users WHERE sso_client_id=c.id) user_count
       FROM sso_clients c JOIN users u ON u.id=c.created_by ORDER BY c.id;
       SELECT m.client_id,m.company,m.center_code,ce.name center_name FROM sso_company_map m
-        JOIN centers ce ON ce.code=m.center_code ORDER BY m.company;`);
+        LEFT JOIN centers ce ON ce.code=m.center_code ORDER BY m.company;`);
     const sets = result.recordsets as mssql.IRecordSet<Record<string, unknown>>[];
     res.json({ app_url: publicAppUrl(), clients: sets[0].map((client) => ({ ...client,
       companies: sets[1].filter((row) => row.client_id === client.id) })) });
@@ -81,10 +81,10 @@ router.put('/:id/companies', async (req, res) => {
   const rows = Array.isArray(req.body?.companies) ? req.body.companies : null;
   if (!Number.isInteger(id) || !rows || rows.length > 200) return res.status(400).json({ error: 'Invalid company mapping' });
   const clean = rows.map((row: Record<string, unknown>) => ({ company: String(row.company || '').trim(),
-    center: String(row.center_code || '').trim().toUpperCase() }));
-  if (clean.some((row: { company: string; center: string }) => !row.company || !row.center)
+    center: String(row.center_code || '').trim().toUpperCase() || null }));
+  if (clean.some((row: { company: string }) => !row.company)
     || new Set(clean.map((row: { company: string }) => row.company)).size !== clean.length)
-    return res.status(400).json({ error: 'Each company needs one center' });
+    return res.status(400).json({ error: 'Select each company once' });
   const tx = pool.transaction();
   try {
     await tx.begin();
@@ -93,10 +93,10 @@ router.put('/:id/companies', async (req, res) => {
     for (const row of clean) {
       const check = await new mssql.Request(tx).input('company', mssql.NVarChar(100), row.company).input('cc', mssql.NVarChar(10), row.center)
         .query(`SELECT (SELECT COUNT(*) FROM companies WHERE name=@company) company_ok,
-          (SELECT COUNT(*) FROM centers WHERE code=@cc AND is_active=1) center_ok`);
+          CASE WHEN @cc IS NULL THEN 1 ELSE (SELECT COUNT(*) FROM centers WHERE code=@cc AND is_active=1) END center_ok`);
       if (!check.recordset[0].company_ok || !check.recordset[0].center_ok) {
         await tx.rollback();
-        return res.status(400).json({ error: `Invalid company or center: ${row.company} → ${row.center}` });
+        return res.status(400).json({ error: `Invalid company or center: ${row.company}${row.center ? ` → ${row.center}` : ''}` });
       }
     }
     // The mapping is configuration owned by this endpoint: it is replaced as a whole on every save.
@@ -105,7 +105,7 @@ router.put('/:id/companies', async (req, res) => {
       .input('company', mssql.NVarChar(100), row.company).input('cc', mssql.NVarChar(10), row.center)
       .query('INSERT INTO sso_company_map(client_id,company,center_code) VALUES(@id,@company,@cc)');
     await new mssql.Request(tx).input('actor', mssql.Int, req.user!.id).input('note', mssql.NVarChar(2000),
-      `SSO companies for client #${id}: ${clean.map((row: { company: string; center: string }) => `${row.company}→${row.center}`).join(', ')}`)
+      `SSO companies for client #${id}: ${clean.map((row: { company: string; center: string | null }) => `${row.company}→${row.center ?? 'auto'}`).join(', ')}`)
       .query(`INSERT INTO admin_audit_events(actor_id,event_type,note) VALUES(@actor,'sso_mapping_updated',@note)`);
     await tx.commit();
     res.json({ success: true });

@@ -54,6 +54,8 @@ export async function clientForKey(rawKey: unknown) {
 export type SsoProfile = {
   employeeCode: string; name: string; company: string; department: string | null;
   designation: string | null; mobile: string | null; email: string | null;
+  /** Optional center/branch from the HRMS (our center code or center name). */
+  center: string | null;
 };
 
 /** Validates the HRMS payload. Only employee ID, name and company are mandatory. */
@@ -74,7 +76,28 @@ export function readProfile(body: Record<string, unknown>): SsoProfile {
   if (email && !EMAIL.test(email)) throw new SsoError(422, 'INVALID_EMAIL', 'email is not valid');
   const mobile = text(body.mobile, 20)?.replace(/[^\d+]/g, '') || null;
   if (mobile && !/^\+?\d{7,15}$/.test(mobile)) throw new SsoError(422, 'INVALID_MOBILE', 'mobile is not valid');
-  return { employeeCode, name, company, department: text(body.department, 80), designation: text(body.designation, 100), mobile, email };
+  return { employeeCode, name, company, department: text(body.department, 80), designation: text(body.designation, 100), mobile, email,
+    center: text(body.center_code ?? body.center, 100) };
+}
+
+/**
+ * Picks the employee's home center from what already exists:
+ * HR-sent center (code or name) → mapping default → the company's only active center.
+ */
+async function resolveCenter(tx: mssql.Transaction, company: string, defaultCenter: string | null, hint: string | null) {
+  const result = await new mssql.Request(tx).input('company', mssql.NVarChar(100), company)
+    .input('hint', mssql.NVarChar(100), hint).input('fallback', mssql.NVarChar(10), defaultCenter)
+    .query(`DECLARE @hit NVARCHAR(10)=NULL,@matched BIT=0;
+      IF @hint IS NOT NULL SELECT TOP 1 @hit=code FROM centers
+        WHERE is_active=1 AND (LOWER(code)=LOWER(@hint) OR LOWER(name)=LOWER(@hint))
+        ORDER BY CASE WHEN company=@company THEN 0 ELSE 1 END,CASE WHEN LOWER(code)=LOWER(@hint) THEN 0 ELSE 1 END;
+      IF @hit IS NOT NULL SET @matched=1;
+      IF @hit IS NULL SET @hit=@fallback;
+      IF @hit IS NULL AND (SELECT COUNT(*) FROM centers WHERE company=@company AND is_active=1)=1
+        SELECT @hit=code FROM centers WHERE company=@company AND is_active=1;
+      SELECT @hit code,@matched matched`);
+  const row = result.recordset[0];
+  return { code: (row?.code as string | null) ?? null, matched: Boolean(row?.matched) };
 }
 
 const placeholderEmail = (code: string) => `sso.${code.toLowerCase().replace(/[^a-z0-9]/g, '-')}@placeholder.invalid`;
@@ -91,10 +114,18 @@ export async function issueLoginLink(clientId: number, profile: SsoProfile, ip: 
   try {
     const q = () => new mssql.Request(tx);
     const mapping = (await q().input('client', mssql.Int, clientId).input('company', mssql.NVarChar(100), profile.company)
-      .query(`SELECT m.company,m.center_code FROM sso_company_map m JOIN companies c ON c.name=m.company
-        JOIN centers ce ON ce.code=m.center_code AND ce.is_active=1
+      .query(`SELECT m.company,ce.code default_center FROM sso_company_map m JOIN companies c ON c.name=m.company
+        LEFT JOIN centers ce ON ce.code=m.center_code AND ce.is_active=1
         WHERE m.client_id=@client AND (LOWER(c.name)=LOWER(@company) OR LOWER(c.code)=LOWER(@company))`)).recordset[0];
     if (!mapping) throw new SsoError(422, 'COMPANY_NOT_MAPPED', `Company "${profile.company}" is not enabled for SSO`);
+    const centerFor = async () => {
+      const center = await resolveCenter(tx, mapping.company, mapping.default_center ?? null, profile.center);
+      if (!center.code) throw new SsoError(422, 'CENTER_NOT_FOUND', profile.center
+        ? `Center "${profile.center}" was not found and "${mapping.company}" has no single default center`
+        : `"${mapping.company}" has more than one center: send center_code, or set a default center in SSO settings`);
+      if (profile.center && !center.matched) note = `center "${profile.center}" not found; used ${center.code}`;
+      return center.code;
+    };
     const byCode = (await q().input('emp', mssql.NVarChar(40), profile.employeeCode)
       .query(`SELECT id,role,is_active,email,email_placeholder FROM users WITH(UPDLOCK,HOLDLOCK) WHERE employee_code=@emp`)).recordset[0];
     const byEmail = profile.email ? (await q().input('email', mssql.NVarChar(100), profile.email)
@@ -114,24 +145,28 @@ export async function issueLoginLink(clientId: number, profile: SsoProfile, ip: 
       if (profile.email && !emailFree) note = 'HR email already used by another account; kept existing email';
       if (target) {
         userId = target.id;
+        // Existing employees keep the center an admin gave them.
+        const current = (await q().input('id', mssql.Int, target.id).query('SELECT center_code FROM users WHERE id=@id')).recordset[0];
+        const centerCode = current?.center_code ?? await centerFor();
         if (!target.is_active) outcome = 'inactive';
         await q().input('id', mssql.Int, target.id).input('emp', mssql.NVarChar(40), profile.employeeCode)
           .input('name', mssql.NVarChar(100), profile.name).input('company', mssql.NVarChar(100), mapping.company)
           .input('dept', mssql.NVarChar(80), profile.department).input('desig', mssql.NVarChar(100), profile.designation)
           .input('mobile', mssql.NVarChar(20), profile.mobile).input('email', mssql.NVarChar(100), emailFree ? profile.email : null)
-          .input('cc', mssql.NVarChar(10), mapping.center_code).input('client', mssql.Int, clientId)
+          .input('cc', mssql.NVarChar(10), centerCode).input('client', mssql.Int, clientId)
           .query(`UPDATE users SET employee_code=@emp,name=@name,company=@company,dept=COALESCE(@dept,dept),
               designation=COALESCE(@desig,designation),mobile=COALESCE(@mobile,mobile),
               email=COALESCE(@email,email),email_placeholder=CASE WHEN @email IS NOT NULL THEN 0 ELSE email_placeholder END,
               center_code=COALESCE(center_code,@cc),sso_client_id=@client,last_sso_at=SYSUTCDATETIME()
             WHERE id=@id`);
       } else {
+        const centerCode = await centerFor();
         const inserted = await q().input('emp', mssql.NVarChar(40), profile.employeeCode)
           .input('name', mssql.NVarChar(100), profile.name).input('company', mssql.NVarChar(100), mapping.company)
           .input('dept', mssql.NVarChar(80), profile.department || 'General').input('desig', mssql.NVarChar(100), profile.designation)
           .input('mobile', mssql.NVarChar(20), profile.mobile)
           .input('email', mssql.NVarChar(100), profile.email || placeholderEmail(profile.employeeCode))
-          .input('placeholder', mssql.Bit, profile.email ? 0 : 1).input('cc', mssql.NVarChar(10), mapping.center_code)
+          .input('placeholder', mssql.Bit, profile.email ? 0 : 1).input('cc', mssql.NVarChar(10), centerCode)
           .input('hash', mssql.NVarChar(256), hashPassword(crypto.randomBytes(24).toString('base64url')))
           .input('client', mssql.Int, clientId)
           .query(`INSERT INTO users(email,name,role,company,dept,employee_code,center_code,password_hash,is_active,
@@ -140,10 +175,10 @@ export async function issueLoginLink(clientId: number, profile: SsoProfile, ip: 
             VALUES(@email,@name,'employee',@company,@dept,@emp,@cc,@hash,1,'sso',@placeholder,@mobile,@desig,@client,SYSUTCDATETIME())`);
         userId = inserted.recordset[0].id; created = true;
       }
-      await q().input('uid', mssql.Int, userId).input('cc', mssql.NVarChar(10), mapping.center_code)
+      await q().input('uid', mssql.Int, userId)
         .query(`INSERT INTO user_centers(user_id,home_center_code)
-          SELECT @uid,COALESCE((SELECT center_code FROM users WHERE id=@uid),@cc)
-          WHERE NOT EXISTS(SELECT 1 FROM user_centers WHERE user_id=@uid)`);
+          SELECT id,center_code FROM users WHERE id=@uid AND center_code IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM user_centers WHERE user_id=@uid)`);
     }
     await q().input('hash', mssql.Char(64), secretHash(ticket)).input('client', mssql.Int, clientId)
       .input('user', mssql.Int, userId).input('outcome', mssql.VarChar(20), outcome)

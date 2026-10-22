@@ -27,7 +27,7 @@ export async function ensureSsoSchema(pool: mssql.ConnectionPool) {
       CREATE TABLE sso_company_map (
         client_id   INT           NOT NULL REFERENCES sso_clients(id),
         company     NVARCHAR(100) NOT NULL,
-        center_code NVARCHAR(10)  NOT NULL REFERENCES centers(code),
+        center_code NVARCHAR(10)  NULL REFERENCES centers(code),
         CONSTRAINT PK_sso_company_map PRIMARY KEY(client_id,company)
       );
     IF OBJECT_ID('sso_tickets','U') IS NULL BEGIN
@@ -70,5 +70,10 @@ export async function ensureSsoSchema(pool: mssql.ConnectionPool) {
       CREATE INDEX IX_login_otps_user ON login_otps(user_id,purpose,created_at DESC);
     END;
     COMMIT TRANSACTION;
+  `);
+  // Default center is optional: employees are matched to an existing center automatically.
+  await pool.request().query(`
+    IF EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('sso_company_map') AND name='center_code' AND is_nullable=0)
+      ALTER TABLE sso_company_map ALTER COLUMN center_code NVARCHAR(10) NULL;
   `);
 }

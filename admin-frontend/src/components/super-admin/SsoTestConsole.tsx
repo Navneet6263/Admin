@@ -8,10 +8,10 @@ type Result = { status: number; ms: number; request: Record<string, unknown>; re
  * Lets a Super Admin call the SSO API exactly as Green HR would and inspect request/response.
  * The key is used for this call only and is never stored.
  */
-export function SsoTestConsole({ companies }: { companies: { code: string; name: string }[] }) {
+export function SsoTestConsole({ companies, keyPrefixes }: { companies: { code: string; name: string }[]; keyPrefixes: string[] }) {
   const [apiKey, setApiKey] = useState("");
   const [form, setForm] = useState({ employee_code: "TEST-001", name: "Test Employee", company: "", department: "Operations",
-    designation: "Executive", mobile: "", email: "" });
+    designation: "Executive", center_code: "", mobile: "", email: "" });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -23,7 +23,14 @@ export function SsoTestConsole({ companies }: { companies: { code: string; name:
   }, [secondsLeft]);
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
+  const trimmedKey = apiKey.trim();
+  const keyProblem = !trimmedKey ? "Paste the API key first — the key box is empty."
+    : !/^amsso_[a-f0-9]{8}_[A-Za-z0-9_-]{43}$/.test(trimmedKey) ? "This doesn't look like a full API key (amsso_xxxxxxxx_ + 43 characters). Copy it again."
+    : keyPrefixes.length && !keyPrefixes.includes(trimmedKey.slice(6, 14))
+      ? `This key doesn't belong to any active integration. Active keys start with ${keyPrefixes.map((prefix) => `amsso_${prefix}_`).join(" or ")}. If you lost it, press “New key”.`
+      : "";
   const run = async () => {
+    if (keyProblem) return;
     setBusy(true); setResult(null);
     // Optional fields are sent only when filled, like a real HRMS would.
     const body = Object.fromEntries(Object.entries(form).filter(([, value]) => value.trim() !== ""));
@@ -58,14 +65,17 @@ export function SsoTestConsole({ companies }: { companies: { code: string; name:
         </select></label>
       <label><span className={label}>department</span><input value={form.department} onChange={(event) => set("department", event.target.value)} className={input} /></label>
       <label><span className={label}>designation</span><input value={form.designation} onChange={(event) => set("designation", event.target.value)} className={input} /></label>
+      <label><span className={label}>center_code</span><input value={form.center_code} onChange={(event) => set("center_code", event.target.value)} className={input} placeholder="optional — e.g. A43" /></label>
       <label><span className={label}>mobile</span><input value={form.mobile} onChange={(event) => set("mobile", event.target.value)} className={input} placeholder="optional" /></label>
-      <label className="md:col-span-2"><span className={label}>email</span><input value={form.email} onChange={(event) => set("email", event.target.value)} className={input} placeholder="optional — try an admin's email to see the block" /></label>
+      <label className="md:col-span-1"><span className={label}>email</span><input value={form.email} onChange={(event) => set("email", event.target.value)} className={input} placeholder="optional — try an admin's email to see the block" /></label>
     </div>
     <div className="mt-4 flex flex-wrap items-center gap-3">
-      <button type="button" disabled={busy} onClick={() => void run()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
+      <button type="button" disabled={busy || Boolean(keyProblem)} onClick={() => void run()} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Call API</button>
       <span className="text-[11px] text-slate-500">POST {apiBaseUrl || window.location.origin}/api/sso/v1/login-link</span>
     </div>
+    {keyProblem && apiKey !== "" && <p className="mt-2 text-xs font-semibold text-rose-700">{keyProblem}</p>}
+    {!apiKey && <p className="mt-2 text-[11px] text-slate-500">Paste the key first{keyPrefixes.length ? ` (starts with amsso_${keyPrefixes[keyPrefixes.length - 1]}_)` : ""}.</p>}
     {result && <div className="mt-4 grid gap-3 lg:grid-cols-2">
       <div><span className={label}>Request body sent</span>
         <pre className="max-h-64 overflow-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-5 text-slate-100">{JSON.stringify(result.request, null, 2)}</pre></div>

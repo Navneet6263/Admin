@@ -5,7 +5,7 @@ import { ExcelExportButton } from "@/components/ExcelExportButton";
 import type { ExportColumn } from "@/lib/excelExport";
 import { SsoTestConsole } from "./SsoTestConsole";
 
-type Mapping = { company: string; center_code: string; center_name?: string };
+type Mapping = { company: string; center_code: string | null; center_name?: string | null };
 type Client = { id: number; name: string; key_prefix: string; is_active: boolean; created_at: string; rotated_at: string | null;
   last_used_at: string | null; created_by_name: string; user_count: number; companies: Mapping[] };
 type SsoEvent = { id: number; event: string; employee_code: string | null; detail: string | null; ip: string | null;
@@ -49,9 +49,9 @@ function KeyDialog({ apiKey, onClose }: { apiKey: string; onClose: () => void })
 }
 
 function MappingEditor({ client, companies, centers, onSaved }: { client: Client; companies: Company[]; centers: Center[]; onSaved: () => void }) {
-  const [rows, setRows] = useState<Mapping[]>(client.companies.map(({ company, center_code }) => ({ company, center_code })));
+  const [rows, setRows] = useState<Mapping[]>(client.companies.map(({ company, center_code }) => ({ company, center_code: center_code ?? "" })));
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [saved, setSaved] = useState(false);
-  useEffect(() => setRows(client.companies.map(({ company, center_code }) => ({ company, center_code }))), [client]);
+  useEffect(() => setRows(client.companies.map(({ company, center_code }) => ({ company, center_code: center_code ?? "" }))), [client]);
   const used = new Set(rows.map((row) => row.company));
   const save = async () => {
     setBusy(true); setError(""); setSaved(false);
@@ -61,16 +61,16 @@ function MappingEditor({ client, companies, centers, onSaved }: { client: Client
   };
   const select = "w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs";
   return <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Companies allowed + default center</p>
-    <p className="mb-2 text-[11px] text-slate-500">Employees of these companies land in this center. Admins can move them later.</p>
+    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Companies allowed</p>
+    <p className="mb-2 text-[11px] text-slate-500">Center is matched automatically: the employee's existing center → the <code>center_code</code> Green HR sends → the default below → the company's only center.</p>
     <div className="space-y-2">
       {rows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_28px] gap-2">
         <select value={row.company} onChange={(event) => setRows(rows.map((item, i) => i === index ? { company: event.target.value, center_code: "" } : item))} className={select}>
           <option value="">Select company</option>
           {companies.filter((company) => company.name === row.company || !used.has(company.name)).map((company) => <option key={company.code} value={company.name}>{company.name} ({company.code})</option>)}
         </select>
-        <select value={row.center_code} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, center_code: event.target.value } : item))} className={select}>
-          <option value="">Default center</option>
+        <select value={row.center_code ?? ""} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, center_code: event.target.value } : item))} className={select}>
+          <option value="">Auto (match existing center)</option>
           {centers.filter((center) => !row.company || center.company === row.company).map((center) => <option key={center.code} value={center.code}>{center.name} ({center.code})</option>)}
         </select>
         <button type="button" onClick={() => setRows(rows.filter((_, i) => i !== index))} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -80,7 +80,7 @@ function MappingEditor({ client, companies, centers, onSaved }: { client: Client
     {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
     <div className="mt-3 flex items-center gap-2">
       <button type="button" onClick={() => setRows([...rows, { company: "", center_code: "" }])} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700"><Plus className="h-3 w-3" /> Add company</button>
-      <button type="button" disabled={busy || rows.some((row) => !row.company || !row.center_code)} onClick={() => void save()}
+      <button type="button" disabled={busy || rows.some((row) => !row.company)} onClick={() => void save()}
         className="ml-auto inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-40"><Save className="h-3 w-3" /> {busy ? "Saving…" : "Save mapping"}</button>
       {saved && <span className="text-[11px] font-semibold text-emerald-700">Saved</span>}
     </div>
@@ -98,6 +98,7 @@ function IntegrationGuide() {
     "company": "GreenCall",
     "department": "Operations",
     "designation": "Executive",
+    "center_code": "A43",
     "mobile": "9876543210",
     "email": "navneet@greencall.com"
   }'`;
@@ -106,7 +107,7 @@ function IntegrationGuide() {
     <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Link2 className="h-4 w-4 text-indigo-600" /> Integration guide for the Green HR team</h3>
     <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-xs leading-5 text-slate-700">
       <li>When an employee clicks <b>Admin Portal</b> in Green HR, the <b>Green HR server</b> (never the browser) calls the API below with the API key.</li>
-      <li>Required: <code>employee_code</code>, <code>name</code>, <code>company</code> (our company name or code). Optional: <code>department</code>, <code>designation</code>, <code>mobile</code>, <code>email</code>.</li>
+      <li>Required: <code>employee_code</code>, <code>name</code>, <code>company</code> (our company name or code). Optional: <code>center_code</code> (our center code or name), <code>department</code>, <code>designation</code>, <code>mobile</code>, <code>email</code>.</li>
       <li>Green HR redirects the employee's browser to the returned <code>login_url</code>. It works <b>once</b> and expires in <b>60 seconds</b>.</li>
       <li>New employees are created automatically as <b>Employee</b>; existing ones are updated. HQ / Super Admin / center accounts are never signed in through SSO — they see "use your admin login".</li>
     </ol>
@@ -119,7 +120,7 @@ function IntegrationGuide() {
         <div><span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Errors</span>
           <table className="w-full text-[11px]"><tbody className="divide-y divide-slate-100">
             {[["401", "INVALID_API_KEY", "Key missing, wrong or disabled"], ["422", "COMPANY_NOT_MAPPED", "Company not enabled below"],
-              ["422", "INVALID_EMPLOYEE_CODE / NAME_REQUIRED …", "Bad or missing field"], ["409", "EMAIL_IN_USE", "Email belongs to another employee ID"],
+              ["422", "CENTER_NOT_FOUND", "Company has several centers — send center_code or set a default"], ["422", "INVALID_EMPLOYEE_CODE / NAME_REQUIRED …", "Bad or missing field"], ["409", "EMAIL_IN_USE", "Email belongs to another employee ID"],
               ["429", "RATE_LIMITED", "Too many calls — retry after a minute"]].map(([status, code, meaning]) =>
               <tr key={code}><td className="py-1 pr-2 font-mono text-slate-500">{status}</td><td className="py-1 pr-2 font-mono text-slate-800">{code}</td><td className="py-1 text-slate-600">{meaning}</td></tr>)}
           </tbody></table></div>
@@ -202,7 +203,7 @@ export function SsoTab() {
     </section>)}
     {!clients.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
       No integration yet. Click <b>New integration</b> to generate the API key for Green HR.</div>}
-    <SsoTestConsole companies={companies} />
+    <SsoTestConsole companies={companies} keyPrefixes={clients.filter((client) => client.is_active).map((client) => client.key_prefix)} />
     <IntegrationGuide />
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
