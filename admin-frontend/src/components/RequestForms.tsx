@@ -1,7 +1,7 @@
 // Specialized sub-forms for the New Request dialog.
 // Each form owns its own local UI + returns a `details` payload the admin can review.
 
-import { Train, Plane, Car, Package, Utensils, Clock3 } from "lucide-react";
+import { Train, Plane, Car, Package, Utensils, Clock3, BedDouble } from "lucide-react";
 import { fmtINR } from "./requestMeta";
 import { businessCardTemplate, type BusinessCardBrand } from "./business-card/businessCardTemplates";
 import type { VCState } from "./business-card/VisitingCardForm";
@@ -47,6 +47,12 @@ export function SelectField({
 /* ---------- ID card — profile-driven request ---------- */
 export type TravelMode = "train" | "flight" | "taxi";
 export interface Pax { name: string; age: string; gender: "Male" | "Female" | "Other"; }
+export const HOTEL_ROOM_TYPES = ["Standard", "Deluxe", "Executive", "Suite"] as const;
+export interface HotelStay {
+  city: string; area: string; checkIn: string; checkOut: string;
+  rooms: string; guests: string; roomType: (typeof HOTEL_ROOM_TYPES)[number];
+  occupancy: "Single" | "Double" | "Twin sharing"; budgetPerNight: string; breakfast: boolean; notes: string;
+}
 export interface TravelState {
   mode: TravelMode;
   purpose: string;
@@ -54,19 +60,91 @@ export interface TravelState {
   klass: string; meal: "Veg" | "Non-Veg" | "None";
   pax: Pax[]; contactMob: string; seatPref: string;
   taxiType: "Sedan" | "SUV" | "Hatchback"; pickupTime: string;
+  /** Optional hotel stay booked together with the travel. */
+  needHotel?: boolean; hotel?: HotelStay;
 }
+export const emptyHotel = (city = "", checkIn = "", checkOut = ""): HotelStay => ({
+  city, area: "", checkIn, checkOut, rooms: "1", guests: "1", roomType: "Standard",
+  occupancy: "Single", budgetPerNight: "", breakfast: true, notes: "",
+});
 export const emptyTravel = (): TravelState => ({
   mode: "train", purpose: "", from: "", to: "", date: "", returnDate: "",
   klass: "3A", meal: "Veg",
   pax: [{ name: "", age: "", gender: "Male" }],
   contactMob: "", seatPref: "No preference",
   taxiType: "Sedan", pickupTime: "",
+  needHotel: false, hotel: emptyHotel(),
 });
+/** Whole nights between check-in and check-out (0 when invalid). */
+export const hotelNights = (h?: HotelStay) => {
+  if (!h?.checkIn || !h.checkOut) return 0;
+  const nights = Math.round((Date.parse(h.checkOut) - Date.parse(h.checkIn)) / 86_400_000);
+  return Number.isFinite(nights) && nights > 0 ? nights : 0;
+};
+export const hotelValid = (t: TravelState) => {
+  if (!t.needHotel) return true;
+  const h = t.hotel;
+  return Boolean(h && h.city.trim() && h.checkIn && hotelNights(h) > 0 && hotelNights(h) <= 60
+    && Number(h.rooms) >= 1 && Number(h.rooms) <= 10 && Number(h.guests) >= Number(h.rooms) && Number(h.guests) <= 30
+    && (!t.date || h.checkIn >= t.date));
+};
 export const travelValid = (t: TravelState) => {
   if (!t.from.trim() || !t.to.trim() || !t.date || !t.purpose.trim()) return false;
+  if (!hotelValid(t)) return false;
   if (t.mode === "taxi") return !!t.pickupTime && !!t.taxiType;
   return t.pax.length > 0 && t.pax.every((p) => p.name.trim() && p.age.trim()) && t.contactMob.trim().length >= 7;
 };
+
+/** Hotel stay section shown inside the travel form once the employee opts in. */
+function HotelStayFields({ travel, onChange }: { travel: TravelState; onChange: (v: TravelState) => void }) {
+  const hotel = travel.hotel ?? emptyHotel(travel.to, travel.date, travel.returnDate);
+  const set = <K extends keyof HotelStay>(k: K, v: HotelStay[K]) => onChange({ ...travel, hotel: { ...hotel, [k]: v } });
+  const nights = hotelNights(hotel);
+  const budget = Number(hotel.budgetPerNight || 0) * nights * Number(hotel.rooms || 1);
+  const toggle = (on: boolean) => onChange({ ...travel, needHotel: on,
+    hotel: on && !travel.hotel?.city ? emptyHotel(travel.to, travel.date, travel.returnDate) : hotel });
+  const dateIssue = travel.needHotel && hotel.checkIn && hotel.checkOut && !nights ? "Check-out must be after check-in"
+    : travel.needHotel && travel.date && hotel.checkIn && hotel.checkIn < travel.date ? "Check-in cannot be before the travel date" : "";
+  return (
+    <div className={sectionCls}>
+      <label className="flex cursor-pointer items-center gap-3">
+        <input type="checkbox" checked={Boolean(travel.needHotel)} onChange={(e) => toggle(e.target.checked)} className="h-4 w-4 accent-indigo-500" />
+        <span className="flex items-center gap-2 text-sm font-bold text-white"><BedDouble className="h-4 w-4 text-indigo-300" /> I also need a hotel stay</span>
+        <span className="ml-auto text-[10px] text-slate-400">Booked together with this trip</span>
+      </label>
+      {travel.needHotel && (
+        <div className="space-y-3 pt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Hotel city *" value={hotel.city} onChange={(v) => set("city", v)} placeholder="e.g. Patna" />
+            <TextField label="Preferred area / landmark" value={hotel.area} onChange={(v) => set("area", v)} placeholder="e.g. Near Boring Road office" />
+            <TextField label="Check-in date *" type="date" min={travel.date || undefined} value={hotel.checkIn} onChange={(v) => set("checkIn", v)} />
+            <TextField label="Check-out date *" type="date" min={hotel.checkIn || travel.date || undefined} value={hotel.checkOut} onChange={(v) => set("checkOut", v)} />
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <TextField label="Rooms *" type="number" min="1" max="10" value={hotel.rooms} onChange={(v) => set("rooms", v.replace(/[^0-9]/g, ""))} />
+            <TextField label="Guests *" type="number" min="1" max="30" value={hotel.guests} onChange={(v) => set("guests", v.replace(/[^0-9]/g, ""))} />
+            <SelectField label="Room type" value={hotel.roomType} onChange={(v) => set("roomType", v as HotelStay["roomType"])} options={HOTEL_ROOM_TYPES} />
+            <SelectField label="Occupancy" value={hotel.occupancy} onChange={(v) => set("occupancy", v as HotelStay["occupancy"])} options={["Single", "Double", "Twin sharing"]} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Budget per night (₹)" type="number" min="0" value={hotel.budgetPerNight} onChange={(v) => set("budgetPerNight", v.replace(/[^0-9.]/g, ""))} placeholder="e.g. 2500" />
+            <TextField label="Special request" value={hotel.notes} onChange={(v) => set("notes", v)} placeholder="Early check-in, non-smoking…" />
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+            <input type="checkbox" checked={hotel.breakfast} onChange={(e) => set("breakfast", e.target.checked)} className="accent-indigo-500" /> Include breakfast
+          </label>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-950/40 px-3 py-2 text-[11px] text-slate-300">
+            <span><b className="text-white">{nights || "—"}</b> night{nights === 1 ? "" : "s"}</span>
+            <span><b className="text-white">{hotel.rooms || 0}</b> room(s) · <b className="text-white">{hotel.guests || 0}</b> guest(s)</span>
+            {budget > 0 && <span>Est. stay budget <b className="text-white">{fmtINR(budget)}</b></span>}
+            {Number(hotel.guests) < Number(hotel.rooms) && <span className="text-rose-300">Guests cannot be fewer than rooms</span>}
+            {dateIssue && <span className="text-rose-300">{dateIssue}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TravelForm({ value, onChange }: { value: TravelState; onChange: (v: TravelState) => void }) {
   const set = <K extends keyof TravelState>(k: K, v: TravelState[K]) => onChange({ ...value, [k]: v });
@@ -157,6 +235,8 @@ export function TravelForm({ value, onChange }: { value: TravelState; onChange: 
           </div>
         </div>
       )}
+
+      <HotelStayFields travel={value} onChange={onChange} />
     </div>
   );
 }
@@ -371,8 +451,9 @@ export function summarizeVC(v: VCState) {
 }
 export function summarizeTravel(t: TravelState) {
   const modeLabel = t.mode === "train" ? "Train (IRCTC)" : t.mode === "flight" ? "Flight" : `Taxi (${t.taxiType})`;
+  const hotel = t.needHotel && t.hotel ? ` + Hotel ${t.hotel.city} (${hotelNights(t.hotel)}N)` : "";
   return {
-    subject: `${modeLabel} — ${t.from} → ${t.to}, ${t.date}`,
+    subject: `${modeLabel} — ${t.from} → ${t.to}, ${t.date}${hotel}`.slice(0, 160),
     description: t.purpose.trim() || `Official business travel from ${t.from} to ${t.to}`,
   };
 }
@@ -442,6 +523,19 @@ export function detailRows(type: string, details: Record<string, unknown> | unde
         rows.push({ label: "Contact", value: s(t.contactMob) });
       } else {
         rows.push({ label: "Pickup time", value: s(t.pickupTime) });
+      }
+      if (t.needHotel && t.hotel) {
+        const h = t.hotel;
+        const nights = hotelNights(h);
+        rows.push(
+          { label: "Hotel", value: `${s(h.city)}${h.area ? ` · ${h.area}` : ""}` },
+          { label: "Stay", value: `${s(h.checkIn)} → ${s(h.checkOut)} (${nights} night${nights === 1 ? "" : "s"})` },
+          { label: "Rooms", value: `${s(h.rooms)} × ${s(h.roomType)} · ${s(h.occupancy)} · ${s(h.guests)} guest(s)` },
+          { label: "Hotel budget", value: h.budgetPerNight ? `${fmtINR(Number(h.budgetPerNight))}/night${h.breakfast ? " · breakfast" : ""}` : (h.breakfast ? "Breakfast included" : "—") },
+          ...(h.notes ? [{ label: "Hotel request", value: h.notes }] : []),
+        );
+      } else {
+        rows.push({ label: "Hotel", value: "Not required" });
       }
       return rows;
     }

@@ -2,6 +2,7 @@ const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
   hq_admin: "HQ Admin",
   center_admin: "Center Admin",
+  center_staff: "Center Staff",
   finance_head: "Finance Head",
   finance: "Finance",
   employee: "Employee",

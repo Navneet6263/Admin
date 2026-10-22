@@ -4,6 +4,18 @@ import { request } from "@/lib/api";
 import { type UserRow, type CenterRow } from "./shared";
 import { useCompanies } from "@/lib/directory";
 import { TablePagination } from "@/components/TablePagination";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import type { ExportColumn } from "@/lib/excelExport";
+
+type CenterExportRow = CenterRow & { people: number };
+const centerColumns: ExportColumn<CenterExportRow>[] = [
+  { key: "code", label: "Center code", value: (row) => row.code },
+  { key: "name", label: "Center", value: (row) => row.name },
+  { key: "city", label: "City", value: (row) => row.city },
+  { key: "company", label: "Company", value: (row) => row.company },
+  { key: "status", label: "Status", value: (row) => (row.is_active ? "Active" : "Inactive") },
+  { key: "people", label: "Assigned users", value: (row) => row.people, type: "number" },
+];
 
 interface CentersAssignmentPanelProps {
   users: UserRow[];
@@ -121,6 +133,8 @@ export function CentersAssignmentPanel({ users, centers, onLoad, searchQuery = "
         </div>
 
         <div className="flex items-center gap-2">
+          <ExcelExportButton exportKey="centers" title="Centers & locations" columns={centerColumns}
+            rows={centers.map((center) => ({ ...center, people: users.filter((user) => user.center_code === center.code).length }))} />
           <button
             onClick={() => { setShowCreateModal(true); setCreateErr(""); setCreateMsg(""); }}
             className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"

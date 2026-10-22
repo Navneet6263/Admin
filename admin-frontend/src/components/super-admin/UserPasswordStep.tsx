@@ -47,11 +47,11 @@ export function UserPasswordStep(props: Props) {
           type="password"
           value={props.password}
           onChange={(event) => props.onPassword(event.target.value)}
-          placeholder="12+ characters with mixed character types"
+          placeholder="7-14 characters with mixed character types"
           className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
           required
-          minLength={12}
-          maxLength={128}
+          minLength={7}
+          maxLength={14}
           autoFocus
         />
         <p className="mt-1.5 text-xs text-slate-400">

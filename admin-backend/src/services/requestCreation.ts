@@ -73,6 +73,18 @@ export async function createEmployeeRequest(input: NewEmployeeRequest): Promise<
           IF @foodDate=CONVERT(DATE,@indiaNow) AND (CONVERT(TIME,@indiaNow)<'10:00' OR CONVERT(TIME,@indiaNow)>='20:00')
             THROW 51005,'Today food booking is available from 10:00 AM to 8:00 PM',1;
         END;
+        IF @type='travel' AND ISNULL(ISJSON(@details),0)=1 AND JSON_VALUE(@details,'$.needHotel')='true' BEGIN
+          DECLARE @checkIn DATE=TRY_CONVERT(DATE,JSON_VALUE(@details,'$.hotel.checkIn')),
+            @checkOut DATE=TRY_CONVERT(DATE,JSON_VALUE(@details,'$.hotel.checkOut')),
+            @tripDate DATE=TRY_CONVERT(DATE,JSON_VALUE(@details,'$.date')),
+            @rooms INT=TRY_CONVERT(INT,JSON_VALUE(@details,'$.hotel.rooms')),
+            @guests INT=TRY_CONVERT(INT,JSON_VALUE(@details,'$.hotel.guests'));
+          IF NULLIF(LTRIM(RTRIM(JSON_VALUE(@details,'$.hotel.city'))),'') IS NULL OR @checkIn IS NULL OR @checkOut IS NULL
+            OR @checkOut<=@checkIn OR DATEDIFF(DAY,@checkIn,@checkOut)>60 OR (@tripDate IS NOT NULL AND @checkIn<@tripDate)
+            THROW 51009,'Enter a valid hotel city and check-in/check-out dates',1;
+          IF @rooms IS NULL OR @rooms NOT BETWEEN 1 AND 10 OR @guests IS NULL OR @guests<@rooms OR @guests>30
+            THROW 51009,'Enter valid hotel rooms and guests',1;
+        END;
         IF @type='id_card' AND (ISNULL(ISJSON(@details),0)<>1 OR ISNULL(JSON_VALUE(@details,'$.brand'),'') NOT IN
           ('vision_india','green_call','talent_foundation','north_star_avantika','north_star_bgcl','north_star_ioag','north_star_iocl')
           OR NULLIF(JSON_VALUE(@details,'$.employeeCode'),'') IS NULL OR NOT EXISTS(

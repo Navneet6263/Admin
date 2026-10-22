@@ -1,5 +1,5 @@
 import mssql from "mssql";
-import { type AuthUser, effectiveRole } from "../auth";
+import { type AuthUser, allowedRequestTypes, effectiveRole } from "../auth";
 import { pool, withDbRetry } from "../db";
 
 const globalRoles = new Set(["super_admin", "hq_admin"]);
@@ -17,6 +17,13 @@ function statusPredicate(status: string) {
     verification: "r.workflow_status='awaiting_verification'",
   };
   return predicates[status] || "(r.status=@status OR r.workflow_status=@status)";
+}
+
+/** Staff only see the request types their Center Admin delegated (values come from a fixed whitelist). */
+export function requestTypePredicate(user: AuthUser, alias = "r") {
+  const types = allowedRequestTypes(user);
+  if (!types) return "1=1";
+  return types.length ? `${alias}.type IN(${types.map((type) => `'${type}'`).join(",")})` : "1=0";
 }
 
 function visibilityPredicate(role: string) {
@@ -57,7 +64,7 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
     ? query.center_code.trim().toUpperCase() : null;
   const selectedCenter = ["center_admin", "hq_admin", "super_admin"].includes(role) ? requestedCenter : null;
   const centerWhere = selectedCenter ? "r.approval_center_code=@selectedCenter" : "1=1";
-  const visibilityWhere = visibilityPredicate(role);
+  const visibilityWhere = `${visibilityPredicate(role)} AND ${requestTypePredicate(user)}`;
   const contentColumns = compact ? "" : ",r.description,r.details";
   const auditColumn = compact ? ",CAST('[]' AS NVARCHAR(MAX)) audit" : `,ISNULL((SELECT
     history.created_at [at],actor.name actor,history.action,history.note
@@ -106,7 +113,7 @@ export async function readWorkflowQueue(user: AuthUser, query: Record<string, un
 
 export async function readWorkflowRequest(user: AuthUser, requestId: number) {
   const role = effectiveRole(user.role);
-  const visibilityWhere = visibilityPredicate(role);
+  const visibilityWhere = `${visibilityPredicate(role)} AND ${requestTypePredicate(user)}`;
   const result = await withDbRetry(() => requestInputs(user, null)
     .input("requestId", mssql.Int, requestId).query(`
       WITH selected AS (SELECT r.*,u.name employeeName,u.email,u.dept employeeDept

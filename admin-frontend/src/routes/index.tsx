@@ -3,6 +3,8 @@ import { CenterCombobox } from "@/components/CenterCombobox";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Facebook, AlertCircle, Loader2, X } from "lucide-react";
 import heroImage from "@/assets/hero-home-decor.jpg";
+import { BrandLogo, BrandMark } from "@/components/BrandLogo";
+import { EmployeeOtpLogin } from "@/components/auth/EmployeeOtpLogin";
 import { request, session } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
@@ -15,7 +17,7 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-type Mode = "signin" | "register" | "forgot";
+type Mode = "signin" | "register" | "forgot" | "otp";
 type CompanyOption = { id: number; code: string; name: string };
 type TeamOption = { id: number; name: string; company: string };
 type CenterOption = { id: number; code: string; name: string; city: string; company: string; is_active: boolean };
@@ -98,6 +100,7 @@ function Home() {
         const routes: Record<string, string> = {
           super_admin: '/super-admin',
           center_admin: '/center-admin',
+          center_staff: '/center-admin',
           finance_head: '/finance',
           hq_admin: '/admin',
         };
@@ -132,6 +135,7 @@ function Home() {
         const routes: Record<string, string> = {
           super_admin: '/super-admin',
           center_admin: '/center-admin',
+          center_staff: '/center-admin',
           finance_head: '/finance',
           hq_admin: '/admin',
         };
@@ -162,13 +166,9 @@ function Home() {
         {/* Header — Matched spacing from screenshot */}
         <header className="absolute top-0 left-0 right-0 z-50">
           <div className="flex items-center justify-between h-20 max-w-[1400px] mx-auto px-8 md:px-16">
-            <span
-              className="font-bold text-xl md:text-2xl text-white shrink-0 cursor-pointer tracking-tight"
-              style={{ fontFamily: "'Nunito', sans-serif" }}
-              onClick={() => setShowLoginCard(false)}
-            >
-              Admin @ Management.
-            </span>
+            <button type="button" className="shrink-0 cursor-pointer drop-shadow-md" onClick={() => setShowLoginCard(false)}>
+              <BrandLogo size={42} tone="light" />
+            </button>
 
             <a
               href="https://facebook.com"
@@ -242,7 +242,13 @@ function Home() {
                     <X className="w-4 h-4" />
                   </button>
 
-                  {submitted ? (
+                  {mode === "otp" ? (
+                    <>
+                      <BrandMark size={40} className="mb-3" />
+                      <EmployeeOtpLogin onBack={() => switchMode("signin")}
+                        onSignedIn={(role) => void navigate({ to: (role === "employee" ? "/employee" : "/") as "/employee" })} />
+                    </>
+                  ) : submitted ? (
                     <div className="text-center py-6">
                       <h2
                         className="text-2xl font-bold text-slate-900 mb-3"
@@ -283,6 +289,7 @@ function Home() {
                     </div>
                   ) : (
                     <>
+                      <BrandMark size={40} className="mb-3" />
                       <h2
                         className="text-2xl font-bold text-slate-900 mb-1"
                         style={{ fontFamily: "'Nunito', sans-serif" }}
@@ -526,6 +533,13 @@ function Home() {
                             </button>
                             <span className="mt-1 block text-[11px]">
                               Admin and finance roles are created by authorized administrators.
+                            </span>
+                            <span className="mt-3 block border-t border-slate-100 pt-3">
+                              Green HR employee?{" "}
+                              <button type="button" onClick={() => switchMode("otp")}
+                                className="text-slate-900 underline underline-offset-2 font-medium">
+                                Sign in with Employee ID &amp; OTP
+                              </button>
                             </span>
                           </>
                         )}

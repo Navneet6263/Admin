@@ -14,6 +14,7 @@ const badges: Record<string, string> = {
   super_admin: "border-purple-200 bg-purple-50 text-purple-800",
   hq_admin: "border-slate-200 bg-slate-50 text-slate-800",
   center_admin: "border-indigo-200 bg-indigo-50 text-indigo-800",
+  center_staff: "border-violet-200 bg-violet-50 text-violet-800",
   finance: "border-emerald-200 bg-emerald-50 text-emerald-800",
   finance_head: "border-teal-200 bg-teal-50 text-teal-800",
   employee: "border-sky-200 bg-sky-50 text-sky-800",

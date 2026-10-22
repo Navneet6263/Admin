@@ -1,9 +1,15 @@
 import { Router } from 'express';
 import mssql from 'mssql';
 import { pool } from '../db';
+import { hasStaffPermission } from '../auth';
 import { resolveCenterScope } from '../services/centerScope';
 
 const router = Router();
+// Staff never see the center overview/audit trail; stock view only when delegated.
+router.use(['/overview', '/activity'], (req, res, next) => req.user!.role === 'center_staff'
+  ? res.status(403).json({ error: 'Insufficient permission' }) : next());
+router.use('/inventory-view', (req, res, next) => hasStaffPermission(req.user!, 'center_inventory')
+  ? next() : res.status(403).json({ error: 'Center inventory access has not been granted' }));
 
 router.get('/overview', async (req, res) => {
   try {

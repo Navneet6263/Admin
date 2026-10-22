@@ -74,7 +74,7 @@ export async function retireVerifierRole(pool: mssql.ConnectionPool) {
     END
 
     ALTER TABLE users ADD CONSTRAINT CK_users_role_current CHECK(role IN
-      ('employee','hq_admin','center_admin','finance','finance_head','super_admin','retired'));
+      ('employee','hq_admin','center_admin','center_staff','finance','finance_head','super_admin','retired'));
 
     COMMIT TRANSACTION;
   `);

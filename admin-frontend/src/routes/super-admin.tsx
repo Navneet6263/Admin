@@ -2,8 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock, AlertTriangle,
-  Download, ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus, KeyRound
+  ShieldCheck, Crown, Gauge, Building2, LineChart, Boxes, UserPlus, KeyRound, SprayCan, ReceiptIndianRupee, Link2
 } from "lucide-react";
+import { SsoTab } from "@/components/super-admin/SsoTab";
+import { ExpenseBook } from "@/components/expenses/ExpenseBook";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { requestExportColumns } from "@/lib/exportColumns";
+import { DailyUsePanel } from "@/components/center-admin/DailyUsePanel";
 import { DashboardLayout, type SearchSuggestion } from "@/components/DashboardLayout";
 import { CenterCombobox } from "@/components/CenterCombobox";
 import { type RequestItem, type RequestStatus } from "@/components/models";
@@ -169,11 +174,14 @@ function SuperAdmin() {
     { id: "overview", label: "Overview", icon: Gauge },
     { id: "analytics", label: "Advance Analytics", icon: LineChart },
     { id: "inventory", label: "Inventory", icon: Boxes },
+    { id: "daily", label: "Daily-use", icon: SprayCan },
+    { id: "expenses", label: "Expense Book", icon: ReceiptIndianRupee },
     { id: "override", label: "Override Center", icon: ShieldCheck },
     { id: "anomalies", label: "Anomalies & Signals", icon: AlertTriangle },
     { id: "team", label: "Team & Roles", icon: UserPlus },
     { id: "centers", label: "Centers & Locations", icon: Building2 },
     { id: "policies", label: "Approval Policies", icon: KeyRound },
+    { id: "sso", label: "SSO · Green HR", icon: Link2 },
   ];
 
   return (
@@ -211,7 +219,7 @@ function SuperAdmin() {
 
         {/* Tabs */}
         <div className="-mx-4 mt-5 border-b border-slate-200 sm:-mx-6">
-          <div className="request-scrollbar flex min-h-11 items-stretch gap-1 overflow-x-auto px-4 sm:px-6">
+          <div className="request-scrollbar flex min-h-11 items-stretch gap-1 overflow-x-auto overflow-y-hidden px-4 sm:px-6">
             {tabs.map((t) => {
               const isActive = tab === t.id;
               return (
@@ -233,9 +241,11 @@ function SuperAdmin() {
                 </button>
               );
             })}
-            <button className="ml-auto inline-flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-[11px] font-medium leading-none whitespace-nowrap text-slate-600 transition-colors duration-150 hover:text-slate-900">
-              <Download className="h-3 w-3 shrink-0" /> Export CSV
-            </button>
+            <div className="ml-auto flex shrink-0 items-center">
+              <ExcelExportButton exportKey="super-requests" title="All requests"
+                subtitle={scopeCenter ? `Center ${scopeCenter}` : "All centers"} columns={requestExportColumns}
+                rows={searchedRequests} dateKey="created" label="Export requests" />
+            </div>
           </div>
         </div>
       </div>
@@ -247,6 +257,8 @@ function SuperAdmin() {
         {!initialLoading && tab === "overview" && <OverviewTab requests={searchedRequests} centerCode={scopeCenter} />}
         {!initialLoading && tab === "analytics" && <AnalyticsTab requests={searchedRequests} history={buildHistory(searchedRequests)} centerCode={scopeCenter} />}
         {tab === "inventory" && <InventoryTab searchQuery={centerSearch} />}
+        {tab === "daily" && <DailyUsePanel key={scopeCenter} centerCode={scopeCenter || undefined} requireCenter />}
+        {tab === "expenses" && <ExpenseBook centerCode={scopeCenter || undefined} />}
         {!initialLoading && tab === "override" && (
           <OverrideTab
             list={overrideList} selected={selected}
@@ -259,6 +271,7 @@ function SuperAdmin() {
         {!initialLoading && tab === "anomalies" && <AnomaliesTab requests={searchedRequests} />}
         {tab === "team" && <TeamTab searchQuery={centerSearch} />}
         {tab === "policies" && <PolicyTab />}
+        {tab === "sso" && <SsoTab />}
         {tab === "centers" && (
           <CentersAssignmentPanel
             users={centerUsers} centers={centers}

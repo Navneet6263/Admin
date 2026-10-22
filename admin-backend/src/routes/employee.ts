@@ -90,7 +90,8 @@ router.post('/requests', async (req: Request, res: Response) => {
       'Stationery items are required', 'Valid stationery items are required', 'Select a valid food booking date and time',
       'Food service time must be between 10:00 AM and 8:00 PM', 'Today food booking is available from 10:00 AM to 8:00 PM']
       .concat('Complete the Vision India ID-card preview before submitting',
-        'Enter a valid 10-digit Indian contact number', 'Enter a valid 10-digit Indian emergency number')
+        'Enter a valid 10-digit Indian contact number', 'Enter a valid 10-digit Indian emergency number',
+        'Enter a valid hotel city and check-in/check-out dates', 'Enter valid hotel rooms and guests')
       .find((item) => message.includes(item));
     res.status(expected ? 400 : 500).json({ error: expected || 'Creation failed' });
   }

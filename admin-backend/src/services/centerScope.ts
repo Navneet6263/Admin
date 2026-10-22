@@ -6,6 +6,7 @@ export async function resolveCenterScope(user: AuthUser, requested?: unknown) {
   const center = String(requested || user.center_code || "").trim().toUpperCase();
   if (!center) return null;
   if (user.role === "super_admin" || user.role === "hq_admin") return center;
+  if (user.role === "center_staff") return center === user.center_code ? center : null;
   if (user.role !== "center_admin") return null;
   if (center === user.center_code) return center;
   const access = await pool.request().input("uid", mssql.Int, user.id)

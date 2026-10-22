@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
 import { CookieOptions, NextFunction, Request, Response } from 'express';
 import mssql from 'mssql';
-import { pool } from './db';
+import { pool, VALID_TYPES } from './db';
 
 export type Role =
   | 'employee'
   | 'hq_admin'
   | 'center_admin'
+  | 'center_staff'
   | 'finance'
   | 'finance_head'
   | 'super_admin';
@@ -20,7 +21,44 @@ export type AuthUser = {
   dept: string;
   employee_code?: string | null;
   center_code?: string | null;
+  permissions?: StaffPermissions | null;
+  /** Signed in via SSO without a real email yet; the UI asks them to add one. */
+  needs_email?: boolean;
+  auth_source?: string;
 };
+
+/** What a Center Admin has delegated to one of their staff accounts. */
+export type StaffPermissions = {
+  request_types: string[];
+  center_inventory: boolean;
+  daily_use: boolean;
+};
+
+export function parseStaffPermissions(raw: unknown): StaffPermissions {
+  let value: Record<string, unknown> = {};
+  try { value = typeof raw === 'string' ? JSON.parse(raw) : (raw as Record<string, unknown>) || {}; }
+  catch { value = {}; }
+  const types = Array.isArray(value.request_types) ? value.request_types : [];
+  return {
+    request_types: VALID_TYPES.filter((type) => types.includes(type)),
+    center_inventory: value.center_inventory === true,
+    daily_use: value.daily_use === true,
+  };
+}
+
+/** Admin roles hold every center capability; staff only what was delegated. */
+export function hasStaffPermission(user: AuthUser, key: 'center_inventory' | 'daily_use') {
+  return user.role !== 'center_staff' || Boolean(user.permissions?.[key]);
+}
+
+/** Request types a user may see and action, or null when unrestricted. */
+export function allowedRequestTypes(user: AuthUser): string[] | null {
+  return user.role === 'center_staff' ? user.permissions?.request_types ?? [] : null;
+}
+
+function withPermissions<T extends { role: Role; permissions?: unknown }>(row: T) {
+  return { ...row, permissions: row.role === 'center_staff' ? parseStaffPermissions(row.permissions) : null };
+}
 
 declare global { namespace Express { interface Request { user?: AuthUser } } }
 
@@ -43,7 +81,8 @@ const cookieOptions: CookieOptions = {
 
 /** Kept as a single permission-normalization hook for route services. */
 export function effectiveRole(role: Role): Role {
-  return role;
+  // Staff act through Center Admin assignments, narrowed by their delegated permissions.
+  return role === 'center_staff' ? 'center_admin' : role;
 }
 
 function cookieToken(req: Request) {
@@ -59,6 +98,9 @@ function sessionToken(req: Request) {
 
 const sessionHash = (token: string) =>
   crypto.createHmac('sha256', key).update(token).digest('hex');
+
+/** Keyed hash for secrets we must look up but never store (API keys, SSO tickets, OTPs). */
+export const secretHash = (value: string) => sessionHash(value);
 
 export async function createSession(userId: number) {
   const token = crypto.randomBytes(32).toString('base64url');
@@ -84,11 +126,14 @@ async function readSession(token?: string): Promise<AuthUser | null> {
   if (!token || !/^[A-Za-z0-9_-]{40,100}$/.test(token)) return null;
   const result = await pool.request().input('hash', mssql.Char(64), sessionHash(token))
     .query(`SELECT u.id,u.email,u.name,u.role,u.company,u.dept,u.employee_code,
-        CASE WHEN u.role IN ('employee','center_admin') THEN u.center_code END center_code
+        CASE WHEN u.role IN ('employee','center_admin','center_staff') THEN u.center_code END center_code,
+        cs.permissions,CAST(u.email_placeholder AS BIT) needs_email,u.auth_source
       FROM auth_sessions s JOIN users u ON u.id=s.user_id
+      LEFT JOIN center_staff cs ON cs.user_id=u.id
       WHERE s.token_hash=@hash AND s.revoked_at IS NULL
         AND s.expires_at>SYSUTCDATETIME() AND u.is_active=1`);
-  return (result.recordset[0] as AuthUser | undefined) || null;
+  const row = result.recordset[0] as AuthUser | undefined;
+  return row ? withPermissions(row) : null;
 }
 
 export function setSessionCookie(res: Response, token: string) {
@@ -122,7 +167,7 @@ export function requireAuth(...roles: Role[]) {
 }
 
 export function requireAssignedCenter(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role === 'center_admin' && !req.user.center_code) {
+  if ((req.user?.role === 'center_admin' || req.user?.role === 'center_staff') && !req.user.center_code) {
     return res.status(403).json({ error: 'A center assignment is required for this account' });
   }
   next();
@@ -130,19 +175,21 @@ export function requireAssignedCenter(req: Request, res: Response, next: NextFun
 
 export async function login(email: string, password: string): Promise<AuthUser | null> {
   const result = await pool.request().input('email', mssql.NVarChar(254), email.trim().toLowerCase())
-    .query(`SELECT id,email,name,role,company,dept,employee_code,
-      CASE WHEN role IN ('employee','center_admin') THEN center_code END center_code,password_hash
-      FROM users WHERE email=@email AND is_active=1`);
+    .query(`SELECT u.id,u.email,u.name,u.role,u.company,u.dept,u.employee_code,
+      CASE WHEN u.role IN ('employee','center_admin','center_staff') THEN u.center_code END center_code,
+      u.password_hash,cs.permissions,CAST(u.email_placeholder AS BIT) needs_email,u.auth_source
+      FROM users u LEFT JOIN center_staff cs ON cs.user_id=u.id
+      WHERE u.email=@email AND u.is_active=1`);
   const row = result.recordset[0];
   const stored = row?.password_hash || dummyPasswordHash;
   if (!verifyPassword(password, stored) || !row) return null;
   const { password_hash: _hash, ...user } = row;
-  return user as AuthUser;
+  return withPermissions(user as AuthUser);
 }
 
 export function passwordError(password: unknown): string | null {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128)
-    return 'Password must be between 12 and 128 characters';
+  if (typeof password !== 'string' || password.length < 7 || password.length > 14)
+    return 'Password must be between 7 and 14 characters';
   if (!/[a-z]/.test(password) || !/[A-Z]/.test(password)
     || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password))
     return 'Password must include uppercase, lowercase, number and special character';

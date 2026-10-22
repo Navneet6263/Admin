@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { requestExportColumns } from "@/lib/exportColumns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { RequestRow } from "@/components/RequestRow";
@@ -184,10 +186,13 @@ function EmployeeConsole() {
             <h1 className="font-display text-2xl font-semibold text-slate-900">Namaste, {currentUser.name.split(" ")[0]}.</h1>
             <p className="text-sm text-slate-500 mt-1">Raise a new request, or track what's already in flight.</p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          <ExcelExportButton exportKey="my-requests" title="My requests" columns={requestExportColumns} rows={filtered} dateKey="created" />
           <button onClick={() => { setPrefillType(null); setDialogOpen(true); }}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg shadow-sm">
             <Plus className="w-4 h-4" strokeWidth={2.5} /> New Request
           </button>
+          </div>
         </div>
 
         {/* Success confirmation toast */}

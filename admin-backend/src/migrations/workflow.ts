@@ -14,7 +14,7 @@ const statements = [
       WHERE cc.parent_object_id=OBJECT_ID('users') AND c.name='role';
     IF @roleConstraint IS NOT NULL EXEC('ALTER TABLE users DROP CONSTRAINT ['+@roleConstraint+']');
     ALTER TABLE users ADD CONSTRAINT CK_users_role_current CHECK(role IN
-      ('employee','hq_admin','center_admin','finance','finance_head','verifier','super_admin','retired'));
+      ('employee','hq_admin','center_admin','center_staff','finance','finance_head','verifier','super_admin','retired'));
   END`,
   `IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID('requests') AND definition LIKE '%withdrawn%') BEGIN
     DECLARE @requestStatusConstraint sysname;

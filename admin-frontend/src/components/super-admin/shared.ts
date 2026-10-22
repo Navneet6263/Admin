@@ -8,7 +8,7 @@ export const autoNote = (actor: string, verb: string, userNote: string) => {
   return userNote?.trim() ? `${head}\n— ${userNote.trim()}` : head;
 };
 
-export type Tab = "overview" | "analytics" | "inventory" | "override" | "anomalies" | "team" | "centers" | "policies";
+export type Tab = "overview" | "analytics" | "inventory" | "daily" | "expenses" | "sso" | "override" | "anomalies" | "team" | "centers" | "policies";
 
 export interface UserRow {
   id: number; name: string; email: string; role: string;

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Search, Command, X } from "lucide-react";
+import { LogOut, Search, X } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
+import { EmailRequiredPrompt } from "./auth/EmailRequiredPrompt";
 import type { ReactNode } from "react";
 import { NotificationBell } from "./NotificationBell";
 import { session } from "@/lib/api";
@@ -59,15 +61,7 @@ export function DashboardLayout({
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 flex flex-col">
       {/* Top bar: brand + search + user */}
       <header className="h-14 border-b border-slate-200/70 bg-white sticky top-0 z-30 flex items-center gap-4 px-4 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-slate-900 grid place-items-center">
-            <Command className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-          </div>
-          <div className="min-w-0 leading-none">
-            <p className="font-display font-semibold text-sm">RequestHub</p>
-            <p className="text-[9px] uppercase tracking-widest text-slate-400 mt-0.5">{workspace}</p>
-          </div>
-        </div>
+        <BrandLogo size={30} subtitle={workspace} className="shrink-0" />
 
         <div className="hidden md:flex flex-1 max-w-lg">
           <div className="relative w-full">
@@ -131,7 +125,7 @@ export function DashboardLayout({
       {/* Workspace tab bar (Flipkart-style horizontal categories) */}
       {tabs.length > 0 && (
         <div className="bg-white border-b border-slate-200/70 sticky top-14 z-20">
-          <div className="flex items-center gap-1 px-2 sm:px-4 overflow-x-auto">
+          <div className="flex items-center gap-1 px-2 sm:px-4 overflow-x-auto overflow-y-hidden">
             <div className="flex items-center gap-1 flex-1 min-w-0">
               {tabs.map((t) => {
                 const Icon = t.icon;
@@ -162,6 +156,7 @@ export function DashboardLayout({
         </div>
       )}
 
+      <EmailRequiredPrompt />
       <main className="flex-1 min-w-0">{children}</main>
     </div>
   );

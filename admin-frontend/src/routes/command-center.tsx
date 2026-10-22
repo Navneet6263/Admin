@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import type { ExportColumn } from "@/lib/excelExport";
 import { request } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
 import {
@@ -29,6 +31,21 @@ interface CenterHealth {
   avg_response_hrs: number; burn_pct: number;
   health: "green" | "amber" | "red"; admin_name: string;
 }
+
+const centerHealthColumns: ExportColumn<CenterHealth>[] = [
+  { key: "code", label: "Center code", value: (row) => row.code },
+  { key: "name", label: "Center", value: (row) => row.name },
+  { key: "city", label: "City", value: (row) => row.city },
+  { key: "admin", label: "Center admin", value: (row) => row.admin_name },
+  { key: "health", label: "Health", value: (row) => row.health.toUpperCase() },
+  { key: "allocated", label: "Budget allocated", value: (row) => row.allocated, type: "currency" },
+  { key: "committed", label: "Committed", value: (row) => row.committed, type: "currency" },
+  { key: "spent", label: "Spent", value: (row) => row.spent, type: "currency" },
+  { key: "burn", label: "Burn %", value: (row) => row.burn_pct, type: "number" },
+  { key: "pending", label: "Pending requests", value: (row) => row.pending_requests, type: "number" },
+  { key: "total", label: "Total requests", value: (row) => row.total_requests, type: "number" },
+  { key: "tat", label: "Avg response (hrs)", value: (row) => row.avg_response_hrs, type: "number" },
+];
 
 interface BurnRate {
   center_code: string; name: string; city: string;
@@ -219,6 +236,7 @@ function CommandCenter() {
             </p>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <ExcelExportButton exportKey="command-center" title="Center health" columns={centerHealthColumns} rows={centers} />
             {redCount > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", padding: "8px 16px", borderRadius: 20 }}>
                 <AlertTriangle size={14} color="#ef4444" />

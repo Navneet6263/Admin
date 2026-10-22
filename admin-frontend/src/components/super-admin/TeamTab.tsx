@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { userExportColumns } from "@/lib/exportColumns";
 import { request } from "@/lib/api";
 import type { CenterOption } from "@/components/CenterCombobox";
 import { DirectorySetupPanel } from "./DirectorySetupPanel";
@@ -105,6 +107,9 @@ export function TeamTab({ mode = "super", searchQuery = "" }: Props) {
             mode === "super" ? undefined : ["employee", "center_admin", "finance", "finance_head"]
           }
         />
+      </div>
+      <div className="flex justify-end">
+        <ExcelExportButton exportKey={`users-${mode}`} title="Team & roles" columns={userExportColumns} rows={users} />
       </div>
       <TeamRoster
         users={users}

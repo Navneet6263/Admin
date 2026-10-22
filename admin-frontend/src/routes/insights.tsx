@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp, TrendingDown, Wallet, CheckCircle2, Clock,
-  Download, Flame,
+  Flame,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { requestExportColumns } from "@/lib/exportColumns";
 import { typeLabels, typeCategory, type RequestItem } from "@/components/models";
 import { typeIcon, fmtINR } from "@/components/requestMeta";
 import { PeopleInsights } from "@/components/insights/PeopleInsights";
@@ -83,9 +85,8 @@ function Insights() {
             <h1 className="font-display text-2xl font-semibold text-slate-900 mt-1">Spend & Approval Insights</h1>
             <p className="text-xs text-slate-500 mt-1">{financialYearLabel} · April–March · live database records</p>
           </div>
-          <button className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md hover:bg-slate-50">
-            <Download className="w-3.5 h-3.5" /> Export CSV
-          </button>
+          <ExcelExportButton exportKey="insights-requests" title="Spend & approval data" subtitle={financialYearLabel}
+            columns={requestExportColumns} rows={requests} dateKey="created" />
         </div>
 
         {/* KPI Strip */}

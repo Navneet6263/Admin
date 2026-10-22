@@ -7,6 +7,7 @@ const localProductionBaseUrl = typeof window !== 'undefined'
   : '';
 const baseUrl = configuredBaseUrl
   || (import.meta.env.DEV ? 'http://localhost:3001' : localProductionBaseUrl);
+export const apiBaseUrl = baseUrl;
 const tokenKey = 'requesthub.token';
 export type SessionUser = {
   id: number;
@@ -17,7 +18,13 @@ export type SessionUser = {
   dept: string;
   employee_code?: string | null;
   center_code?: string | null;
+  permissions?: StaffPermissions | null;
+  /** SSO account still on a placeholder email. */
+  needs_email?: boolean;
+  auth_source?: string;
 };
+/** Delegated by a Center Admin to a center staff account. */
+export type StaffPermissions = { request_types: string[]; center_inventory: boolean; daily_use: boolean };
 
 const userKey = 'requesthub.user';
 let verifiedUser: SessionUser | null = null;
@@ -57,8 +64,8 @@ export const session = {
     try { await request('/api/auth/logout', { method: 'POST' }, false); }
     finally { this.clear(); }
   },
-  async me() {
-    if (verifiedUser && Date.now() - verifiedAt < 15_000) return verifiedUser;
+  async me(force = false) {
+    if (!force && verifiedUser && Date.now() - verifiedAt < 15_000) return verifiedUser;
     if (!meInFlight) meInFlight = request<SessionUser>('/api/auth/me')
       .then((user) => {
         verifiedUser = user; verifiedAt = Date.now();

@@ -13,7 +13,11 @@ import { TeamTab } from "@/components/super-admin/TeamTab";
 import { VendorApprovalNotice } from "@/components/vendors/VendorApprovalNotice";
 import { getPagedRequests, request, toRequest } from "@/lib/api";
 import { useSessionUser } from "@/lib/useSessionUser";
-import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2 } from "lucide-react";
+import { Filter, Inbox, Send, CheckCircle2, XCircle, ShieldCheck, Package, AlertTriangle, CircleDollarSign, Users, LineChart, Undo2, SprayCan, ReceiptIndianRupee } from "lucide-react";
+import { ExpenseBook } from "@/components/expenses/ExpenseBook";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { fetchAllWorkflowRequests, requestExportColumns } from "@/lib/exportColumns";
+import { DailyUsePanel } from "@/components/center-admin/DailyUsePanel";
 import { protectedRoute } from "@/components/ProtectedRoute";
 import { MasterDetailLoadingSkeleton } from "@/components/LoadingSkeletons";
 
@@ -42,7 +46,7 @@ function HqAdminConsole() {
   }), [sessionUser]);
 
   const [requests, setRequests] = useState<RequestItem[]>([]);
-  const [view, setView] = useState<"requests" | "analytics" | "inventory" | "expenses" | "team">("requests");
+  const [view, setView] = useState<"requests" | "analytics" | "inventory" | "daily" | "book" | "expenses" | "team">("requests");
   const [tab, setTab] = useState<Tab>("inbox");
   const [typeFilter, setTypeFilter] = useState<RequestType | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
@@ -257,7 +261,7 @@ function HqAdminConsole() {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">HQ Admin · Request Operations</p>
             <h1 className="font-display text-2xl font-semibold text-slate-900">
-              {view === "requests" ? "Approval Queue" : view === "analytics" ? "Advanced Analytics" : view === "inventory" ? "Stationery Inventory" : view === "expenses" ? "Expense Analytics" : "Team & Roles"}
+              {view === "requests" ? "Approval Queue" : view === "analytics" ? "Advanced Analytics" : view === "inventory" ? "Stationery Inventory" : view === "daily" ? "Daily-use Stock" : view === "book" ? "Expense Book" : view === "expenses" ? "Expense Analytics" : "Team & Roles"}
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium rounded border border-emerald-100 bg-emerald-50 text-emerald-700">
@@ -289,6 +293,10 @@ function HqAdminConsole() {
               </span>
             )}
           </button>
+          <button type="button" onClick={() => setView("daily")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border ${
+              view === "daily" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+            }`}><SprayCan className="w-3.5 h-3.5" /> Daily-use</button>
           <button type="button" onClick={() => setView("analytics")}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border ${
               view === "analytics" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
@@ -296,12 +304,16 @@ function HqAdminConsole() {
           <button type="button" onClick={() => setView("expenses")}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border ${
               view === "expenses" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
-            }`}><CircleDollarSign className="w-3.5 h-3.5" /> Expenses</button>
+            }`}><CircleDollarSign className="w-3.5 h-3.5" /> Request spend</button>
+          <button type="button" onClick={() => setView("book")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border ${
+              view === "book" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
+            }`}><ReceiptIndianRupee className="w-3.5 h-3.5" /> Expense Book</button>
           <button type="button" onClick={() => setView("team")}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border ${
               view === "team" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"
             }`}><Users className="w-3.5 h-3.5" /> Team & Roles</button>
-          {view !== "team" && <div className="ml-auto flex items-center gap-2">
+          {view !== "team" && <div className="ml-auto flex flex-wrap items-center gap-2">
             {centerFilter && <button type="button" onClick={() => setCenterFilter("")}
               className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800">All Centers</button>}
             <CenterCombobox centers={centers} value={centerFilter} onChange={setCenterFilter}
@@ -310,7 +322,8 @@ function HqAdminConsole() {
         </div>
 
         {view === "requests" && (
-          <div className="flex items-center gap-1 border-b border-slate-200 -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
+          <div className="flex items-center gap-3 border-b border-slate-200 -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
             {tabs.map((t) => (
               <button key={t.id} type="button" onClick={() => { setTab(t.id); setPage(1); setChecked(new Set()); }}
                 className={`flex items-center gap-2 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px whitespace-nowrap ${
@@ -320,12 +333,25 @@ function HqAdminConsole() {
                 <span className={`px-1.5 py-0.5 rounded text-[10px] tabular-nums ${tab === t.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500"}`}>{t.count}</span>
               </button>
             ))}
+            </div>
+            <div className="shrink-0 py-1.5">
+              <ExcelExportButton exportKey="hq-requests" title="HQ requests"
+                subtitle={`${tabs.find((t) => t.id === tab)?.label ?? tab}${centerFilter ? ` · ${centerFilter}` : " · All centers"}`}
+                columns={requestExportColumns} rows={filtered}
+                fetchAll={() => fetchAllWorkflowRequests(`status=${tab}${centerFilter ? `&center_code=${encodeURIComponent(centerFilter)}` : ""}`)}
+                fetchAllLabel={`All ${total} requests in this tab`} dateKey="created"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100" />
+            </div>
           </div>
         )}
       </div>
 
       {view === "inventory" ? (
         <div className="mx-4 sm:mx-6 mt-4 h-[calc(100vh-13rem)] min-h-[560px]"><InventoryPanel /></div>
+      ) : view === "daily" ? (
+        <div className="mx-4 sm:mx-6 mt-4 pb-10"><DailyUsePanel key={centerFilter} centerCode={centerFilter || undefined} requireCenter /></div>
+      ) : view === "book" ? (
+        <div className="mx-4 sm:mx-6 mt-4 pb-10"><ExpenseBook centerCode={centerFilter || undefined} /></div>
       ) : view === "analytics" ? (
         <div className="mx-4 sm:mx-6 mt-4 pb-10"><HqAnalyticsPanel requests={requests} centerCode={centerFilter} /></div>
       ) : view === "expenses" ? (

@@ -4,7 +4,7 @@ import { effectiveRole, requireAssignedCenter } from "../auth";
 import { pool } from "../db";
 import { completeApproval } from "../services/approval";
 import { notify, notifyRole } from "../services/notifications";
-import { readWorkflowQueue, readWorkflowRequest } from "../services/workflowQueue";
+import { readWorkflowQueue, readWorkflowRequest, requestTypePredicate } from "../services/workflowQueue";
 import { markAssigned, resolveDeliveryIssue } from "../services/fulfillment";
 
 const router = Router();
@@ -40,7 +40,7 @@ async function actionable(user: Express.Request["user"], requestId: number) {
     .input("uid", mssql.Int, user!.id)
     .input("cc", mssql.NVarChar(10), user!.center_code || null)
     .query(`SELECT TOP 1 r.* FROM requests r
-      WHERE r.id=@rid AND r.workflow_status='awaiting_approval' AND
+      WHERE r.id=@rid AND r.workflow_status='awaiting_approval' AND ${requestTypePredicate(user!)} AND
       (@role='super_admin' OR EXISTS(SELECT 1 FROM request_assignments a
         WHERE a.request_id=r.id AND a.is_active=1 AND a.can_act=1 AND a.role=@role
         AND (a.user_id IS NULL OR a.user_id=@uid) AND (@role='hq_admin' OR a.center_code=@cc OR EXISTS(

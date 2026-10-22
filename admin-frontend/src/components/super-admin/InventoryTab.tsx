@@ -5,6 +5,8 @@ import { StockMovementHistory } from "@/components/StockMovementHistory";
 import { useInventory, type InventoryItem } from "@/components/liveInventory";
 import { InventoryOverview } from "./InventoryOverview";
 import { InventoryStockRegister } from "./InventoryStockRegister";
+import { ExcelExportButton } from "@/components/ExcelExportButton";
+import { stockExportColumns } from "@/lib/exportColumns";
 
 export function InventoryTab({ searchQuery = "" }: { searchQuery?: string }) {
   const items = useInventory();
@@ -27,6 +29,8 @@ export function InventoryTab({ searchQuery = "" }: { searchQuery?: string }) {
             Monitor stock health, catalog value and every item movement from one place.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <ExcelExportButton exportKey="stationery-stock" title="Stationery inventory" columns={stockExportColumns} rows={items} />
         <button
           type="button"
           onClick={() => setAddOpen(true)}
@@ -34,6 +38,7 @@ export function InventoryTab({ searchQuery = "" }: { searchQuery?: string }) {
         >
           <Plus className="h-3.5 w-3.5" /> Add inventory item
         </button>
+        </div>
       </div>
 
       <InventoryOverview items={items} />

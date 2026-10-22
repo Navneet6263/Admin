@@ -179,8 +179,8 @@ export function SmartUserForm({
 
 function validPassword(password: string) {
   return (
-    password.length >= 12 &&
-    password.length <= 128 &&
+    password.length >= 7 &&
+    password.length <= 14 &&
     /[a-z]/.test(password) &&
     /[A-Z]/.test(password) &&
     /[0-9]/.test(password) &&

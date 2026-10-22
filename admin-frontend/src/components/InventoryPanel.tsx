@@ -5,6 +5,8 @@ import { DeleteInventoryDialog, InventoryItemDialog } from "./InventoryItemDialo
 import { fmtINR } from "./requestMeta";
 import { TablePagination } from "./TablePagination";
 import { InventoryCategorySummary } from "./InventoryCategorySummary";
+import { ExcelExportButton } from "./ExcelExportButton";
+import { stockExportColumns } from "@/lib/exportColumns";
 
 export function InventoryPanel() {
   const items = useInventory(); const [query, setQuery] = useState(""); const [category, setCategory] = useState("all");
@@ -31,6 +33,7 @@ export function InventoryPanel() {
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5">
       <div className="relative min-w-[200px] flex-1"><Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search item, category or SKU…" className="w-full rounded border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-slate-300" /></div>
       <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"><option value="all">All categories</option>{INVENTORY_CATEGORIES.map((value) => <option key={value}>{value}</option>)}</select>
+      <ExcelExportButton exportKey="stationery-stock" title="Stationery inventory" columns={stockExportColumns} rows={filtered} />
       <button type="button" onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"><Plus className="h-3.5 w-3.5" /> Add item</button>
     </div>
     <div className="flex-1 overflow-auto"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>

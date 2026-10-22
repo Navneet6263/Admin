@@ -17,6 +17,7 @@ import { Route as EmployeeRouteImport } from './routes/employee'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as FinanceHeadRouteImport } from './routes/finance-head'
 import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as SsoRouteImport } from './routes/sso'
 import { Route as SuperAdminRouteImport } from './routes/super-admin'
 
 const IndexRoute = IndexRouteImport.update({
@@ -59,6 +60,11 @@ const InsightsRoute = InsightsRouteImport.update({
   path: '/insights',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SsoRoute = SsoRouteImport.update({
+  id: '/sso',
+  path: '/sso',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SuperAdminRoute = SuperAdminRouteImport.update({
   id: '/super-admin',
   path: '/super-admin',
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/finance': typeof FinanceRoute
   '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
+  '/sso': typeof SsoRoute
   '/super-admin': typeof SuperAdminRoute
 }
 export interface FileRoutesByTo {
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/finance': typeof FinanceRoute
   '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
+  '/sso': typeof SsoRoute
   '/super-admin': typeof SuperAdminRoute
 }
 export interface FileRoutesById {
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/finance': typeof FinanceRoute
   '/finance-head': typeof FinanceHeadRoute
   '/insights': typeof InsightsRoute
+  '/sso': typeof SsoRoute
   '/super-admin': typeof SuperAdminRoute
 }
 export interface FileRouteTypes {
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/finance-head'
     | '/insights'
+    | '/sso'
     | '/super-admin'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/finance-head'
     | '/insights'
+    | '/sso'
     | '/super-admin'
   id:
     | '__root__'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/finance-head'
     | '/insights'
+    | '/sso'
     | '/super-admin'
   fileRoutesById: FileRoutesById
 }
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   FinanceRoute: typeof FinanceRoute
   FinanceHeadRoute: typeof FinanceHeadRoute
   InsightsRoute: typeof InsightsRoute
+  SsoRoute: typeof SsoRoute
   SuperAdminRoute: typeof SuperAdminRoute
 }
 
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InsightsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sso': {
+      id: '/sso'
+      path: '/sso'
+      fullPath: '/sso'
+      preLoaderRoute: typeof SsoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/super-admin': {
       id: '/super-admin'
       path: '/super-admin'
@@ -224,6 +244,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceRoute: FinanceRoute,
   FinanceHeadRoute: FinanceHeadRoute,
   InsightsRoute: InsightsRoute,
+  SsoRoute: SsoRoute,
   SuperAdminRoute: SuperAdminRoute,
 }
 export const routeTree = rootRouteImport

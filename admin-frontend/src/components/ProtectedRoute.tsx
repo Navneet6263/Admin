@@ -6,6 +6,7 @@ type AppRole =
   | 'employee'
   | 'hq_admin'
   | 'center_admin'
+  | 'center_staff'
   | 'finance'
   | 'finance_head'
   | 'super_admin';
@@ -14,6 +15,7 @@ const homeByRole: Record<AppRole, string> = {
   employee: '/employee',
   hq_admin: '/admin',
   center_admin: '/center-admin',
+  center_staff: '/center-admin',
   finance: '/finance',
   finance_head: '/finance',
   super_admin: '/super-admin',
