@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, KeyRound, Link2, Plus, Power, RefreshCw, Save, ShieldCheck, Trash2, X } from "lucide-react";
-import { apiBaseUrl, request } from "@/lib/api";
+import { KeyRound, Plus, Power, RefreshCw, Save, ShieldCheck, Trash2, X } from "lucide-react";
+import { request } from "@/lib/api";
 import { ExcelExportButton } from "@/components/ExcelExportButton";
 import type { ExportColumn } from "@/lib/excelExport";
 import { SsoTestConsole } from "./SsoTestConsole";
+import { CopyButton, SsoUserGuide } from "./SsoUserGuide";
 
 type Mapping = { company: string; center_code: string | null; center_name?: string | null };
 type Client = { id: number; name: string; key_prefix: string; is_active: boolean; created_at: string; rotated_at: string | null;
@@ -26,13 +27,6 @@ const eventColumns: ExportColumn<SsoEvent>[] = [
   { key: "detail", label: "Detail", value: (row) => row.detail },
   { key: "ip", label: "IP", value: (row) => row.ip },
 ];
-
-function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  return <button type="button" onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }); }}
-    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
-    {done ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}{done ? "Copied" : "Copy"}</button>;
-}
 
 function KeyDialog({ apiKey, onClose }: { apiKey: string; onClose: () => void }) {
   return <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm">
@@ -85,49 +79,6 @@ function MappingEditor({ client, companies, centers, onSaved }: { client: Client
       {saved && <span className="text-[11px] font-semibold text-emerald-700">Saved</span>}
     </div>
   </div>;
-}
-
-function IntegrationGuide() {
-  const endpoint = `${apiBaseUrl || window.location.origin}/api/sso/v1/login-link`;
-  const curl = `curl -X POST "${endpoint}" \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: amsso_xxxxxxxx_<secret>" \\
-  -d '{
-    "employee_code": "GC-1042",
-    "name": "Navneet Kumar",
-    "company": "GreenCall",
-    "department": "Operations",
-    "designation": "Executive",
-    "center_code": "A43",
-    "mobile": "9876543210",
-    "email": "navneet@greencall.com"
-  }'`;
-  const response = `{ "login_url": "https://<portal>/sso?ticket=…", "expires_in": 60, "account": "created | existing | admin_account | inactive" }`;
-  return <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-    <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Link2 className="h-4 w-4 text-indigo-600" /> Integration guide for the Green HR team</h3>
-    <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-xs leading-5 text-slate-700">
-      <li>When an employee clicks <b>Admin Portal</b> in Green HR, the <b>Green HR server</b> (never the browser) calls the API below with the API key.</li>
-      <li>Required: <code>employee_code</code>, <code>name</code>, <code>company</code> (our company name or code). Optional: <code>center_code</code> (our center code or name), <code>department</code>, <code>designation</code>, <code>mobile</code>, <code>email</code>.</li>
-      <li>Green HR redirects the employee's browser to the returned <code>login_url</code>. It works <b>once</b> and expires in <b>60 seconds</b>.</li>
-      <li>New employees are created automatically as <b>Employee</b>; existing ones are updated. HQ / Super Admin / center accounts are never signed in through SSO — they see "use your admin login".</li>
-    </ol>
-    <div className="mt-4 grid gap-3 lg:grid-cols-2">
-      <div><div className="mb-1 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Request</span><CopyButton text={curl} /></div>
-        <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-5 text-slate-100">{curl}</pre></div>
-      <div className="space-y-3">
-        <div><span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Success (200)</span>
-          <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-5 text-emerald-200">{response}</pre></div>
-        <div><span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Errors</span>
-          <table className="w-full text-[11px]"><tbody className="divide-y divide-slate-100">
-            {[["401", "INVALID_API_KEY", "Key missing, wrong or disabled"], ["422", "COMPANY_NOT_MAPPED", "Company not enabled below"],
-              ["422", "CENTER_NOT_FOUND", "Company has several centers — send center_code or set a default"], ["422", "INVALID_EMPLOYEE_CODE / NAME_REQUIRED …", "Bad or missing field"], ["409", "EMAIL_IN_USE", "Email belongs to another employee ID"],
-              ["429", "RATE_LIMITED", "Too many calls — retry after a minute"]].map(([status, code, meaning]) =>
-              <tr key={code}><td className="py-1 pr-2 font-mono text-slate-500">{status}</td><td className="py-1 pr-2 font-mono text-slate-800">{code}</td><td className="py-1 text-slate-600">{meaning}</td></tr>)}
-          </tbody></table></div>
-      </div>
-    </div>
-    <p className="mt-3 text-[11px] text-slate-500">Employees can also open the portal directly and sign in with <b>Employee ID + email OTP</b> once their email is on record.</p>
-  </section>;
 }
 
 /** Super Admin → SSO: HRMS integrations, keys, company mapping, guide and activity. */
@@ -204,7 +155,7 @@ export function SsoTab() {
     {!clients.length && <div className="rounded-xl border border-dashed border-slate-300 bg-white py-12 text-center text-sm text-slate-500">
       No integration yet. Click <b>New integration</b> to generate the API key for Green HR.</div>}
     <SsoTestConsole companies={companies} keyPrefixes={clients.filter((client) => client.is_active).map((client) => client.key_prefix)} />
-    <IntegrationGuide />
+    <SsoUserGuide />
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
         <h3 className="text-sm font-semibold text-slate-900">SSO activity</h3>
